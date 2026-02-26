@@ -21,6 +21,7 @@ const statusConfig: Record<string, { color: string; icon: React.ElementType }> =
 
 const Batches = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { user, profile, role } = useAuth();
   const canApprove = role === "approver" || role === "super_admin";
 
