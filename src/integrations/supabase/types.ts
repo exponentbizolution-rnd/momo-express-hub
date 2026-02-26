@@ -51,6 +51,7 @@ export type Database = {
           approver_user_id: string | null
           batch_number: string
           created_at: string
+          csv_content: string | null
           error_records: number
           file_name: string | null
           id: string
@@ -70,6 +71,7 @@ export type Database = {
           approver_user_id?: string | null
           batch_number: string
           created_at?: string
+          csv_content?: string | null
           error_records?: number
           file_name?: string | null
           id?: string
@@ -89,6 +91,7 @@ export type Database = {
           approver_user_id?: string | null
           batch_number?: string
           created_at?: string
+          csv_content?: string | null
           error_records?: number
           file_name?: string | null
           id?: string
