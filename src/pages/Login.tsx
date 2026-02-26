@@ -17,6 +17,17 @@ const Login = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Handle email confirmation redirect — sign out the auto-session and prompt manual login
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=signup")) {
+      supabase.auth.signOut().then(() => {
+        toast.success("Email confirmed! Please sign in.");
+        window.history.replaceState(null, "", window.location.pathname);
+      });
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
