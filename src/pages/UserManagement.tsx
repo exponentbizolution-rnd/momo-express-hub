@@ -50,7 +50,7 @@ const UserManagement = () => {
       // Fetch all profiles (super_admin RLS allows this)
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
-        .select("user_id, full_name");
+        .select("user_id, full_name, email");
       if (pErr) throw pErr;
 
       // Fetch all roles
