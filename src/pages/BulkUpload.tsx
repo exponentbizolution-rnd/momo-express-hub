@@ -140,8 +140,8 @@ const BulkUpload = () => {
       await supabase.from("audit_logs").insert({
         action: `Uploaded batch ${batch.batch_number} (${validRows.length} records, ZMW ${totalAmount.toLocaleString()})`,
         action_type: "upload",
-        user_name: "John Mwale",
-        user_role: "Initiator",
+        user_name: profile?.full_name || "Unknown",
+        user_role: role || "initiator",
       });
 
       toast.success(`Batch ${batch.batch_number} created with ${validRows.length} transactions`);
