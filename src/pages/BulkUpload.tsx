@@ -40,6 +40,7 @@ const BulkUpload = () => {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [batchName, setBatchName] = useState("");
+  const { user, profile, role } = useAuth();
 
   const parseFile = useCallback((f: File) => {
     Papa.parse(f, {
