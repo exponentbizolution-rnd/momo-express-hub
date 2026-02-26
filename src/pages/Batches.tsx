@@ -36,10 +36,16 @@ const Batches = () => {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status, batch_number }: { id: string; status: string; batch_number: string }) => {
+    mutationFn: async ({ id, status, batch_number, initiator_user_id }: { id: string; status: string; batch_number: string; initiator_user_id: string | null }) => {
+      // Enforce dual authorization: approver cannot be the same as initiator
+      if (status === "approved" && initiator_user_id === user?.id) {
+        throw new Error("You cannot approve a batch you initiated (dual authorization required)");
+      }
+
       const { error } = await supabase.from("batches").update({
         status,
-        approved_by: status === "approved" ? "Admin" : undefined,
+        approved_by: status === "approved" ? profile?.full_name : undefined,
+        approver_user_id: status === "approved" ? user?.id : undefined,
         approved_at: status === "approved" ? new Date().toISOString() : undefined,
       }).eq("id", id);
       if (error) throw error;
@@ -47,8 +53,8 @@ const Batches = () => {
       await supabase.from("audit_logs").insert({
         action: `${status === "approved" ? "Approved" : "Rejected"} batch ${batch_number}`,
         action_type: status === "approved" ? "approve" : "reject",
-        user_name: "Admin",
-        user_role: "Approver",
+        user_name: profile?.full_name || "Unknown",
+        user_role: role || "approver",
       });
     },
     onSuccess: (_, { status }) => {
