@@ -66,6 +66,7 @@ const UserManagement = () => {
         return {
           user_id: p.user_id,
           full_name: p.full_name || "Unnamed User",
+          email: p.email || "",
           role: (r?.role as AppRole) || null,
           role_id: r?.id || null,
         } as UserWithRole;
