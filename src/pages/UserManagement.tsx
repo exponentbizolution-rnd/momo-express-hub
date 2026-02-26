@@ -164,9 +164,11 @@ const UserManagement = () => {
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                           {u.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
                         </div>
-                        <span className="font-medium">{u.full_name}</span>
-                        {u.email && <span className="text-xs text-muted-foreground">{u.email}</span>}
-                    </td>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{u.full_name}</span>
+                          {u.email && <span className="text-xs text-muted-foreground">{u.email}</span>}
+                        </div>
+                      </div>
                     <td className="px-5 py-4">
                       {u.role ? (
                         <Badge variant="outline" className={roleBadgeClass[u.role]}>
