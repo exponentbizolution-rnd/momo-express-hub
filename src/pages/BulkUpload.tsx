@@ -153,25 +153,7 @@ const BulkUpload = () => {
         user_role: role || "initiator",
       });
 
-      toast.success(`Batch ${batch.batch_number} created — triggering disbursements...`);
-
-      // Auto-approve and trigger disbursements for sandbox testing
-      await supabase.from("batches").update({
-        status: "approved",
-        approved_by: "Auto (Sandbox)",
-        approved_at: new Date().toISOString(),
-      }).eq("id", batch.id);
-
-      const { error: fnError } = await supabase.functions.invoke("process-disbursements", {
-        body: { batchId: batch.id },
-      });
-
-      if (fnError) {
-        console.error("Disbursement trigger error:", fnError);
-        toast.error("Batch created but disbursement processing failed to start.");
-      } else {
-        toast.success("Disbursements are now processing via MTN MoMo sandbox!");
-      }
+      toast.success(`Batch ${batch.batch_number} created — awaiting approver authorization`);
 
       setFile(null);
       setValidated(false);
