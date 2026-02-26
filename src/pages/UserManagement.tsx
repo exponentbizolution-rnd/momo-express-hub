@@ -20,6 +20,7 @@ type AppRole = Database["public"]["Enums"]["app_role"];
 interface UserWithRole {
   user_id: string;
   full_name: string;
+  email: string;
   role: AppRole | null;
   role_id: string | null;
 }
@@ -49,7 +50,7 @@ const UserManagement = () => {
       // Fetch all profiles (super_admin RLS allows this)
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
-        .select("user_id, full_name");
+        .select("user_id, full_name, email");
       if (pErr) throw pErr;
 
       // Fetch all roles
@@ -65,6 +66,7 @@ const UserManagement = () => {
         return {
           user_id: p.user_id,
           full_name: p.full_name || "Unnamed User",
+          email: p.email || "",
           role: (r?.role as AppRole) || null,
           role_id: r?.id || null,
         } as UserWithRole;
@@ -162,7 +164,10 @@ const UserManagement = () => {
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                           {u.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
                         </div>
-                        <span className="font-medium">{u.full_name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{u.full_name}</span>
+                          {u.email && <span className="text-xs text-muted-foreground">{u.email}</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4">
