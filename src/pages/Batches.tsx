@@ -104,7 +104,11 @@ const Batches = () => {
       >
         {!batches || batches.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground">
-            <p className="text-sm">No batches yet. Upload a CSV file to create your first batch.</p>
+            <p className="text-sm">
+              {canApprove
+                ? "No pending batches. Batches uploaded by initiators will appear here for your review and approval."
+                : "No batches yet. Upload a CSV file to create your first batch."}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
