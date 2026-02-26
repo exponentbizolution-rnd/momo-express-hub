@@ -44,6 +44,13 @@ const BulkUpload = () => {
   const { user, profile, role } = useAuth();
 
   const parseFile = useCallback((f: File) => {
+    // Read raw content for storage
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setRawCsvContent(e.target?.result as string || "");
+    };
+    reader.readAsText(f);
+
     Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
