@@ -12,6 +12,7 @@ import BulkUpload from "./pages/BulkUpload";
 import Batches from "./pages/Batches";
 import Reports from "./pages/Reports";
 import AuditLog from "./pages/AuditLog";
+import UserManagement from "./pages/UserManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/batches" element={<Batches />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/audit" element={<AuditLog />} />
+              <Route path="/users" element={<UserManagement />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
