@@ -124,13 +124,13 @@ const Batches = () => {
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                             <Eye size={14} />
                           </Button>
-                          {batch.status === "pending" && (
+                          {batch.status === "pending" && canApprove && (
                             <>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-success hover:text-success"
-                                onClick={() => updateStatus.mutate({ id: batch.id, status: "approved", batch_number: batch.batch_number })}
+                                onClick={() => updateStatus.mutate({ id: batch.id, status: "approved", batch_number: batch.batch_number, initiator_user_id: batch.initiator_user_id })}
                               >
                                 <CheckCircle size={14} />
                               </Button>
@@ -138,7 +138,7 @@ const Batches = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                onClick={() => updateStatus.mutate({ id: batch.id, status: "cancelled", batch_number: batch.batch_number })}
+                                onClick={() => updateStatus.mutate({ id: batch.id, status: "cancelled", batch_number: batch.batch_number, initiator_user_id: batch.initiator_user_id })}
                               >
                                 <XCircle size={14} />
                               </Button>
