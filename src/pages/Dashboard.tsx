@@ -71,7 +71,7 @@ const Dashboard = () => {
         .from("transactions")
         .select("*", { count: "exact", head: true });
 
-      const { data: successTx } = await supabase
+      const { count: successCount } = await supabase
         .from("transactions")
         .select("*", { count: "exact", head: true })
         .eq("status", "success");
@@ -87,7 +87,7 @@ const Dashboard = () => {
 
       const totalDisbursed = amountData?.reduce((sum, b) => sum + (b.total_amount || 0), 0) || 0;
       const successRate = totalTx && totalTx > 0
-        ? ((successTx?.count || 0) / totalTx * 100).toFixed(1)
+        ? ((successCount || 0) / totalTx * 100).toFixed(1)
         : "—";
 
       return {
