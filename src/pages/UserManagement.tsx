@@ -165,7 +165,7 @@ const UserManagement = () => {
                           {u.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
                         </div>
                         <span className="font-medium">{u.full_name}</span>
-                      </div>
+                        {u.email && <span className="text-xs text-muted-foreground">{u.email}</span>}
                     </td>
                     <td className="px-5 py-4">
                       {u.role ? (
