@@ -20,6 +20,7 @@ type AppRole = Database["public"]["Enums"]["app_role"];
 interface UserWithRole {
   user_id: string;
   full_name: string;
+  email: string;
   role: AppRole | null;
   role_id: string | null;
 }
