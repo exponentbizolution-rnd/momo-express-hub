@@ -169,6 +169,7 @@ const UserManagement = () => {
                           {u.email && <span className="text-xs text-muted-foreground">{u.email}</span>}
                         </div>
                       </div>
+                    </td>
                     <td className="px-5 py-4">
                       {u.role ? (
                         <Badge variant="outline" className={roleBadgeClass[u.role]}>
