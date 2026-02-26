@@ -19,6 +19,7 @@ const navItems = [
   { to: "/batches", label: "Batches", icon: ClipboardList },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/audit", label: "Audit Log", icon: Shield },
+  { to: "/users", label: "User Management", icon: Settings, roles: ["super_admin"] },
 ];
 
 const AppSidebar = () => {
