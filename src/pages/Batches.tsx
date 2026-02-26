@@ -56,10 +56,26 @@ const Batches = () => {
         user_name: profile?.full_name || "Unknown",
         user_role: role || "approver",
       });
+
+      // Automatically trigger disbursements after approval
+      if (status === "approved") {
+        const { data, error: fnError } = await supabase.functions.invoke("process-disbursements", {
+          body: { batchId: id },
+        });
+        if (fnError) {
+          console.error("Disbursement trigger error:", fnError);
+          throw new Error("Batch approved but disbursement processing failed to start. Check logs.");
+        }
+        return data;
+      }
     },
     onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["batches"] });
-      toast.success(`Batch ${status === "approved" ? "approved" : "rejected"} successfully`);
+      if (status === "approved") {
+        toast.success("Batch approved — disbursements are now processing");
+      } else {
+        toast.success("Batch rejected successfully");
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
