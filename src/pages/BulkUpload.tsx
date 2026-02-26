@@ -1,33 +1,77 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, X, Info } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, X, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
+import Papa from "papaparse";
+import { supabase } from "@/integrations/supabase/client";
 
-interface ValidationRow {
+interface ParsedRow {
   row: number;
   name: string;
   phone: string;
-  amount: string;
+  amount: number;
+  reference: string;
+  description: string;
   error?: string;
 }
 
-const mockValidation: ValidationRow[] = [
-  { row: 1, name: "Grace Banda", phone: "260975123456", amount: "2,500.00" },
-  { row: 2, name: "Peter Mulenga", phone: "260966789012", amount: "1,800.00" },
-  { row: 3, name: "Mary Phiri", phone: "26095534", amount: "3,200.00", error: "Invalid mobile number format" },
-  { row: 4, name: "David Tembo", phone: "260977654321", amount: "950.00" },
-  { row: 5, name: "Joyce Mumba", phone: "260966111222", amount: "55,000.00", error: "Amount exceeds ZMW 50,000 limit" },
-  { row: 6, name: "Peter Mulenga", phone: "260966789012", amount: "1,800.00", error: "Duplicate entry (same as row 2)" },
-  { row: 7, name: "Ruth Zulu", phone: "260955333444", amount: "4,100.00" },
-];
+const validatePhone = (phone: string) => /^260\d{9}$/.test(phone.replace(/\s/g, ""));
+
+const downloadTemplate = (format: "csv") => {
+  const header = "Recipient Name,Mobile Number,Amount (ZMW),Reference,Description";
+  const sample = "Grace Banda,260975123456,2500,REF001,January salary";
+  const blob = new Blob([header + "\n" + sample], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `expopay_template.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 const BulkUpload = () => {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [validated, setValidated] = useState(false);
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [batchName, setBatchName] = useState("");
+
+  const parseFile = useCallback((f: File) => {
+    Papa.parse(f, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const seen = new Map<string, number>();
+        const parsed: ParsedRow[] = results.data.map((raw: any, i: number) => {
+          const name = (raw["Recipient Name"] || "").trim();
+          const phone = (raw["Mobile Number"] || "").trim().replace(/\s/g, "");
+          const amountStr = (raw["Amount (ZMW)"] || raw["Amount"] || "0").toString().replace(/,/g, "");
+          const amount = parseFloat(amountStr) || 0;
+          const reference = (raw["Reference"] || "").trim();
+          const description = (raw["Description"] || "").trim();
+
+          let error: string | undefined;
+          if (!name) error = "Missing recipient name";
+          else if (!validatePhone(phone)) error = "Invalid mobile number (must be 260XXXXXXXXX)";
+          else if (amount < 1 || amount > 50000) error = "Amount must be ZMW 1–50,000";
+          else if (seen.has(phone + amount)) error = `Duplicate entry (same as row ${seen.get(phone + amount)})`;
+
+          if (!error) seen.set(phone + amount, i + 1);
+
+          return { row: i + 1, name, phone, amount, reference, description, error };
+        });
+
+        setRows(parsed);
+        setValidated(true);
+        setBatchName(f.name.replace(/\.(csv|xlsx?)$/i, ""));
+      },
+      error: () => toast.error("Failed to parse file"),
+    });
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -43,14 +87,80 @@ const BulkUpload = () => {
     if (selected) setFile(selected);
   };
 
-  const errors = mockValidation.filter((r) => r.error);
-  const valid = mockValidation.filter((r) => !r.error);
+  const handleValidate = () => {
+    if (file) parseFile(file);
+  };
+
+  const handleSubmit = async (excludeErrors: boolean) => {
+    setSubmitting(true);
+    try {
+      const validRows = excludeErrors ? rows.filter((r) => !r.error) : rows;
+      const errorRows = rows.filter((r) => r.error);
+      const totalAmount = validRows.reduce((sum, r) => sum + r.amount, 0);
+
+      // Create batch
+      const { data: batch, error: batchError } = await supabase
+        .from("batches")
+        .insert({
+          batch_number: "", // trigger will generate
+          name: batchName || file?.name || "Untitled Batch",
+          file_name: file?.name,
+          total_records: rows.length,
+          valid_records: validRows.length,
+          error_records: errorRows.length,
+          total_amount: totalAmount,
+          initiated_by: "John Mwale",
+          status: "pending",
+        })
+        .select()
+        .single();
+
+      if (batchError) throw batchError;
+
+      // Insert transactions
+      const txRows = validRows.map((r) => ({
+        batch_id: batch.id,
+        row_number: r.row,
+        recipient_name: r.name,
+        mobile_number: r.phone,
+        amount: r.amount,
+        reference: r.reference || null,
+        description: r.description || null,
+      }));
+
+      if (txRows.length > 0) {
+        const { error: txError } = await supabase.from("transactions").insert(txRows);
+        if (txError) throw txError;
+      }
+
+      // Log audit
+      await supabase.from("audit_logs").insert({
+        action: `Uploaded batch ${batch.batch_number} (${validRows.length} records, ZMW ${totalAmount.toLocaleString()})`,
+        action_type: "upload",
+        user_name: "John Mwale",
+        user_role: "Initiator",
+      });
+
+      toast.success(`Batch ${batch.batch_number} created with ${validRows.length} transactions`);
+      setFile(null);
+      setValidated(false);
+      setRows([]);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to submit batch");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const errors = rows.filter((r) => r.error);
+  const valid = rows.filter((r) => !r.error);
+  const totalAmount = valid.reduce((sum, r) => sum + r.amount, 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Bulk Payment Upload</h1>
-        <p className="text-sm text-muted-foreground mt-1">Upload CSV or Excel files to process bulk disbursements</p>
+        <p className="text-sm text-muted-foreground mt-1">Upload CSV files to process bulk disbursements</p>
       </div>
 
       {/* Template Download */}
@@ -65,25 +175,17 @@ const BulkUpload = () => {
         <div className="flex-1">
           <p className="text-sm font-medium">Download Template</p>
           <p className="text-xs text-muted-foreground">
-            Use our template with the required columns: Recipient Name, Mobile Number, Amount, Reference, Description
+            Required columns: Recipient Name, Mobile Number, Amount (ZMW), Reference, Description
           </p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => downloadTemplate("csv")}>
           <Download size={14} />
           CSV Template
-        </Button>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Download size={14} />
-          Excel Template
         </Button>
       </motion.div>
 
       {/* Upload Zone */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         {!file ? (
           <label
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -97,8 +199,8 @@ const BulkUpload = () => {
               <Upload size={24} className="text-muted-foreground" />
             </div>
             <p className="text-sm font-medium">Drop your file here, or click to browse</p>
-            <p className="text-xs text-muted-foreground mt-1">Supports CSV and Excel (.xlsx) — Max 50MB / 10,000 records</p>
-            <input type="file" accept=".csv,.xlsx" onChange={handleFileSelect} className="hidden" />
+            <p className="text-xs text-muted-foreground mt-1">Supports CSV — Max 50MB / 10,000 records</p>
+            <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
           </label>
         ) : (
           <div className="rounded-xl border border-border bg-card p-5">
@@ -114,15 +216,11 @@ const BulkUpload = () => {
               </div>
               <div className="flex items-center gap-2">
                 {!validated && (
-                  <Button size="sm" onClick={() => setValidated(true)} className="gap-2">
+                  <Button size="sm" onClick={handleValidate} className="gap-2">
                     Validate File
                   </Button>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setFile(null); setValidated(false); }}
-                >
+                <Button variant="ghost" size="sm" onClick={() => { setFile(null); setValidated(false); setRows([]); }}>
                   <X size={16} />
                 </Button>
               </div>
@@ -133,17 +231,16 @@ const BulkUpload = () => {
 
       {/* Validation Results */}
       <AnimatePresence>
-        {validated && (
+        {validated && rows.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             className="space-y-4"
           >
-            {/* Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="rounded-lg border border-border bg-card p-4 text-center">
-                <p className="text-2xl font-display font-bold">{mockValidation.length}</p>
+                <p className="text-2xl font-display font-bold">{rows.length}</p>
                 <p className="text-xs text-muted-foreground">Total Records</p>
               </div>
               <div className="rounded-lg border border-success/20 bg-success/5 p-4 text-center">
@@ -155,22 +252,23 @@ const BulkUpload = () => {
                 <p className="text-xs text-muted-foreground">Errors</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4 text-center">
-                <p className="text-2xl font-display font-bold">ZMW 14,350</p>
+                <p className="text-2xl font-display font-bold">ZMW {totalAmount.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Batch Total</p>
               </div>
             </div>
 
-            {/* Validation Report Table */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="p-5 border-b border-border flex items-center justify-between">
                 <h3 className="font-display text-base font-semibold">Validation Report</h3>
-                <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
-                  {errors.length} issues found
-                </Badge>
+                {errors.length > 0 && (
+                  <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                    {errors.length} issues found
+                  </Badge>
+                )}
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-96">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
                       <th className="px-5 py-3">Row</th>
                       <th className="px-5 py-3">Recipient Name</th>
@@ -180,12 +278,12 @@ const BulkUpload = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {mockValidation.map((row) => (
+                    {rows.map((row) => (
                       <tr key={row.row} className={`border-b border-border last:border-0 ${row.error ? "bg-destructive/[0.03]" : ""}`}>
                         <td className="px-5 py-3 text-muted-foreground">{row.row}</td>
                         <td className="px-5 py-3 font-medium">{row.name}</td>
                         <td className="px-5 py-3">{row.phone}</td>
-                        <td className="px-5 py-3">{row.amount}</td>
+                        <td className="px-5 py-3">{row.amount.toLocaleString()}</td>
                         <td className="px-5 py-3">
                           {row.error ? (
                             <Tooltip>
@@ -211,17 +309,24 @@ const BulkUpload = () => {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex items-center justify-between rounded-xl border border-border bg-card p-5">
               <div>
                 <p className="text-sm font-medium">Ready to submit?</p>
-                <p className="text-xs text-muted-foreground">{errors.length} errors must be fixed or excluded before processing</p>
+                <p className="text-xs text-muted-foreground">
+                  {errors.length > 0
+                    ? `${errors.length} errors will be excluded. ${valid.length} valid records will be submitted.`
+                    : `All ${valid.length} records are valid and ready.`}
+                </p>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" size="sm">
-                  Exclude Errors & Submit
-                </Button>
-                <Button size="sm" disabled={errors.length > 0}>
+                {errors.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => handleSubmit(true)} disabled={submitting || valid.length === 0}>
+                    {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+                    Exclude Errors & Submit ({valid.length})
+                  </Button>
+                )}
+                <Button size="sm" onClick={() => handleSubmit(false)} disabled={submitting || errors.length > 0}>
+                  {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
                   Submit All
                 </Button>
               </div>

@@ -14,7 +14,178 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          action_type: string
+          created_at: string
+          details: Json | null
+          id: string
+          user_name: string | null
+          user_role: string | null
+        }
+        Insert: {
+          action: string
+          action_type: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          user_name?: string | null
+          user_role?: string | null
+        }
+        Update: {
+          action?: string
+          action_type?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          user_name?: string | null
+          user_role?: string | null
+        }
+        Relationships: []
+      }
+      batches: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          batch_number: string
+          created_at: string
+          error_records: number
+          file_name: string | null
+          id: string
+          initiated_by: string | null
+          name: string
+          organization_id: string | null
+          status: string
+          total_amount: number
+          total_records: number
+          updated_at: string
+          valid_records: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          batch_number: string
+          created_at?: string
+          error_records?: number
+          file_name?: string | null
+          id?: string
+          initiated_by?: string | null
+          name: string
+          organization_id?: string | null
+          status?: string
+          total_amount?: number
+          total_records?: number
+          updated_at?: string
+          valid_records?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          batch_number?: string
+          created_at?: string
+          error_records?: number
+          file_name?: string | null
+          id?: string
+          initiated_by?: string | null
+          name?: string
+          organization_id?: string | null
+          status?: string
+          total_amount?: number
+          total_records?: number
+          updated_at?: string
+          valid_records?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          daily_limit: number
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          batch_id: string
+          created_at: string
+          description: string | null
+          error_message: string | null
+          id: string
+          mobile_number: string
+          mtn_transaction_id: string | null
+          processed_at: string | null
+          recipient_name: string
+          reference: string | null
+          retry_count: number
+          row_number: number | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          batch_id: string
+          created_at?: string
+          description?: string | null
+          error_message?: string | null
+          id?: string
+          mobile_number: string
+          mtn_transaction_id?: string | null
+          processed_at?: string | null
+          recipient_name: string
+          reference?: string | null
+          retry_count?: number
+          row_number?: number | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          batch_id?: string
+          created_at?: string
+          description?: string | null
+          error_message?: string | null
+          id?: string
+          mobile_number?: string
+          mtn_transaction_id?: string | null
+          processed_at?: string | null
+          recipient_name?: string
+          reference?: string | null
+          retry_count?: number
+          row_number?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
