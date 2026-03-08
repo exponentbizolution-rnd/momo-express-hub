@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  DollarSign,
+  Banknote,
   Users,
   Clock,
   CheckCircle,
@@ -144,7 +144,7 @@ const Dashboard = () => {
           title="Total Disbursed"
           value={stats ? formatAmount(stats.totalDisbursed) : "—"}
           subtitle={stats ? `${stats.totalTx.toLocaleString()} transactions` : ""}
-          icon={DollarSign}
+          icon={Banknote}
           variant="primary"
         />
         <StatCard
