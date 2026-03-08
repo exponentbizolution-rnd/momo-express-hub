@@ -165,7 +165,10 @@ Deno.serve(async (req) => {
 
     if (txError) throw txError;
     if (!transactions || transactions.length === 0) {
-      throw new Error("No pending transactions found for this batch");
+      console.log("No pending transactions found — batch may have already been processed");
+      return new Response(JSON.stringify({ success: true, message: "No pending transactions — already processed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log(`Found ${transactions.length} pending transactions`);
