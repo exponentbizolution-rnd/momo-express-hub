@@ -159,17 +159,22 @@ Deno.serve(async (req) => {
     for (const txn of transactions) {
       try {
         // Update transaction to processing
+        console.log(`[Txn ${txn.id}] Setting status to processing...`);
         await supabase.from("transactions").update({ status: "processing" }).eq("id", txn.id);
 
         // Initiate transfer
+        console.log(`[Txn ${txn.id}] Initiating transfer to ${txn.mobile_number}, amount: ${txn.amount}...`);
         const { referenceId } = await transferFunds(token, primaryKey, txn, targetEnvironment);
+        console.log(`[Txn ${txn.id}] Transfer initiated, referenceId: ${referenceId}`);
 
         // Wait and check status (with retries)
         let finalStatus = "pending";
         let reason: string | undefined;
         for (let attempt = 0; attempt < 5; attempt++) {
           await sleep(2000);
+          console.log(`[Txn ${txn.id}] Checking status attempt ${attempt + 1}/5...`);
           const statusResult = await checkTransferStatus(token, primaryKey, referenceId, targetEnvironment);
+          console.log(`[Txn ${txn.id}] Status: ${statusResult.status}`);
           if (statusResult.status === "SUCCESSFUL") {
             finalStatus = "completed";
             break;
@@ -178,10 +183,10 @@ Deno.serve(async (req) => {
             reason = statusResult.reason;
             break;
           }
-          // Still pending, wait longer on next attempt
         }
 
         if (finalStatus === "completed") {
+          console.log(`[Txn ${txn.id}] Marking as completed`);
           await supabase
             .from("transactions")
             .update({
@@ -192,6 +197,7 @@ Deno.serve(async (req) => {
             .eq("id", txn.id);
           successCount++;
         } else {
+          console.log(`[Txn ${txn.id}] Marking as failed: ${reason || finalStatus}`);
           await supabase
             .from("transactions")
             .update({
@@ -207,15 +213,20 @@ Deno.serve(async (req) => {
         // Rate limiting: ~10 req/s
         await sleep(100);
       } catch (txnError) {
-        console.error(`Transaction ${txn.id} failed:`, txnError);
-        await supabase
-          .from("transactions")
-          .update({
-            status: "failed",
-            error_message: txnError instanceof Error ? txnError.message : "Unknown error",
-            retry_count: txn.retry_count + 1,
-          })
-          .eq("id", txn.id);
+        const errMsg = txnError instanceof Error ? txnError.message : "Unknown error";
+        console.error(`[Txn ${txn.id}] FATAL ERROR:`, errMsg);
+        try {
+          await supabase
+            .from("transactions")
+            .update({
+              status: "failed",
+              error_message: errMsg,
+              retry_count: txn.retry_count + 1,
+            })
+            .eq("id", txn.id);
+        } catch (updateErr) {
+          console.error(`[Txn ${txn.id}] Failed to update status after error:`, updateErr);
+        }
         failCount++;
       }
     }

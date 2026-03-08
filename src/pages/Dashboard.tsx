@@ -25,6 +25,7 @@ import { useEffect, useState } from "react";
 import { Tables } from "@/integrations/supabase/types";
 
 const statusColor: Record<string, string> = {
+  completed: "text-success",
   success: "text-success",
   failed: "text-destructive",
   pending: "text-warning",
