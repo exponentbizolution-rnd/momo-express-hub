@@ -25,6 +25,7 @@ import { useEffect, useState } from "react";
 import { Tables } from "@/integrations/supabase/types";
 
 const statusColor: Record<string, string> = {
+  completed: "text-success",
   success: "text-success",
   failed: "text-destructive",
   pending: "text-warning",
@@ -74,7 +75,7 @@ const Dashboard = () => {
       const { count: successCount } = await supabase
         .from("transactions")
         .select("*", { count: "exact", head: true })
-        .eq("status", "success");
+        .eq("status", "completed");
 
       const { count: pendingBatches } = await supabase
         .from("batches")
