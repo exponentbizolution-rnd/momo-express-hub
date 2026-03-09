@@ -68,8 +68,9 @@ const AppSidebar = () => {
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-sidebar border-r border-sidebar-border">
-      <div className="flex h-16 items-center px-5 border-b border-sidebar-border">
+      <div className="flex h-16 items-center justify-between px-5 border-b border-sidebar-border">
         <Logo />
+        <EnvironmentBadge />
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
