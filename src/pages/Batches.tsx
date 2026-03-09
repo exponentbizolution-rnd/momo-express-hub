@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
 
 const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock },
