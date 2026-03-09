@@ -165,6 +165,13 @@ const Dashboard = () => {
           variant="primary"
         />
         <StatCard
+          title="Wallet Balance"
+          value={formatWalletBalance()}
+          subtitle="Live MTN account balance"
+          icon={Wallet}
+          variant="accent"
+        />
+        <StatCard
           title="Pending Batches"
           value={stats?.pendingBatches.toString() || "0"}
           subtitle="Awaiting approval"
