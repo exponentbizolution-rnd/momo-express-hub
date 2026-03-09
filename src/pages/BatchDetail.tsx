@@ -38,6 +38,7 @@ const BatchDetail = () => {
   const { profile, role } = useAuth();
   const canRefund = role === "approver" || role === "super_admin";
   const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
+  const [timelineTxId, setTimelineTxId] = useState<string | null>(null);
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", batchId],
