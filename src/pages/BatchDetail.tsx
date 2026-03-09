@@ -1,17 +1,23 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { useState } from "react";
 
 const txStatusConfig: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock, label: "Pending" },
   processing: { color: "bg-primary/10 text-primary border-primary/20", icon: RefreshCw, label: "Processing" },
   completed: { color: "bg-success/10 text-success border-success/20", icon: CheckCircle, label: "Completed" },
   failed: { color: "bg-destructive/10 text-destructive border-destructive/20", icon: XCircle, label: "Failed" },
+  refund_processing: { color: "bg-info/10 text-info border-info/20", icon: RefreshCw, label: "Refund Processing" },
+  refunded: { color: "bg-success/10 text-success border-success/20", icon: CheckCircle, label: "Refunded" },
+  refund_failed: { color: "bg-destructive/10 text-destructive border-destructive/20", icon: XCircle, label: "Refund Failed" },
 };
 
 const batchStatusConfig: Record<string, string> = {
@@ -27,6 +33,10 @@ const batchStatusConfig: Record<string, string> = {
 const BatchDetail = () => {
   const { batchId } = useParams<{ batchId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { profile, role } = useAuth();
+  const canRefund = role === "approver" || role === "super_admin";
+  const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", batchId],
@@ -56,6 +66,37 @@ const BatchDetail = () => {
     enabled: !!batchId,
   });
 
+  const refundMutation = useMutation({
+    mutationFn: async (transactionId: string) => {
+      const { data, error } = await supabase.functions.invoke("process-refund", {
+        body: {
+          transactionId,
+          requestedBy: profile?.full_name || "Unknown",
+          requestedRole: role || "approver",
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Refund failed");
+      return data;
+    },
+    onMutate: (transactionId) => {
+      setRefundingTxId(transactionId);
+    },
+    onSuccess: () => {
+      toast.success("Refund completed successfully");
+      queryClient.invalidateQueries({ queryKey: ["transactions", batchId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-batches"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Refund failed");
+    },
+    onSettled: () => {
+      setRefundingTxId(null);
+    },
+  });
+
   const isLoading = batchLoading || txLoading;
 
   if (isLoading) {
@@ -77,9 +118,9 @@ const BatchDetail = () => {
     );
   }
 
-  const completedCount = transactions?.filter((t) => t.status === "completed").length ?? 0;
-  const failedCount = transactions?.filter((t) => t.status === "failed").length ?? 0;
-  const pendingCount = transactions?.filter((t) => t.status === "pending" || t.status === "processing").length ?? 0;
+  const completedCount = transactions?.filter((t) => ["completed", "refunded"].includes(t.status)).length ?? 0;
+  const failedCount = transactions?.filter((t) => ["failed", "refund_failed"].includes(t.status)).length ?? 0;
+  const pendingCount = transactions?.filter((t) => ["pending", "processing", "refund_processing"].includes(t.status)).length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -107,11 +148,11 @@ const BatchDetail = () => {
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
         <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground">Completed</p>
+          <p className="text-xs font-medium text-muted-foreground">Completed / Refunded</p>
           <p className="text-2xl font-bold text-success mt-1">{completedCount}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground">Failed</p>
+          <p className="text-xs font-medium text-muted-foreground">Failed / Refund Failed</p>
           <p className="text-2xl font-bold text-destructive mt-1">{failedCount}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
@@ -145,12 +186,15 @@ const BatchDetail = () => {
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Error</th>
                   <th className="px-5 py-3">Processed At</th>
+                  <th className="px-5 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.map((tx) => {
                   const cfg = txStatusConfig[tx.status] || txStatusConfig.pending;
                   const StatusIcon = cfg.icon;
+                  const canTriggerRefund = canRefund && ["failed", "refund_failed"].includes(tx.status) && !!tx.mtn_transaction_id;
+
                   return (
                     <tr key={tx.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-5 py-3 text-muted-foreground">{tx.row_number ?? "—"}</td>
@@ -170,6 +214,27 @@ const BatchDetail = () => {
                       </td>
                       <td className="px-5 py-3 text-xs text-muted-foreground">
                         {tx.processed_at ? new Date(tx.processed_at).toLocaleString() : "—"}
+                      </td>
+                      <td className="px-5 py-3">
+                        {canTriggerRefund ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-warning hover:text-warning"
+                            disabled={refundMutation.isPending}
+                            onClick={() => refundMutation.mutate(tx.id)}
+                          >
+                            {refundingTxId === tx.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <>
+                                <Undo2 size={14} className="mr-1" /> Refund
+                              </>
+                            )}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   );

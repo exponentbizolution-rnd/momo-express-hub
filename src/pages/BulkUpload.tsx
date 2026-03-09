@@ -17,6 +17,15 @@ interface ParsedRow {
   reference: string;
   description: string;
   error?: string;
+  warning?: string;
+}
+
+interface RecipientValidationResult {
+  row: number;
+  phone: string;
+  valid: boolean | null;
+  checked: boolean;
+  reason?: string;
 }
 
 const validatePhone = (phone: string) => /^260\d{9}$/.test(phone.replace(/\s/g, ""));
@@ -41,8 +50,68 @@ const BulkUpload = () => {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [batchName, setBatchName] = useState("");
+  const [validatingRecipients, setValidatingRecipients] = useState(false);
   const { user, profile, role } = useAuth();
   const isRestricted = role === "approver" || role === "auditor";
+
+  const runRecipientValidation = useCallback(async (parsedRows: ParsedRow[]) => {
+    const candidates = parsedRows
+      .filter((r) => !r.error)
+      .map((r) => ({ row: r.row, phone: r.phone }));
+
+    if (candidates.length === 0) return parsedRows;
+
+    setValidatingRecipients(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-recipients", {
+        body: { recipients: candidates },
+      });
+
+      if (error) throw error;
+
+      const results = (data?.results || []) as RecipientValidationResult[];
+      const resultByRow = new Map<number, RecipientValidationResult>(results.map((r) => [r.row, r]));
+      const existingErrors = new Set(parsedRows.filter((r) => !!r.error).map((r) => r.row));
+
+      const updatedRows = parsedRows.map((row) => {
+        if (row.error) return row;
+
+        const validation = resultByRow.get(row.row);
+        if (!validation) return row;
+
+        if (validation.valid === false) {
+          return { ...row, error: validation.reason || "Recipient wallet validation failed" };
+        }
+
+        if (!validation.checked || validation.valid === null) {
+          return { ...row, warning: validation.reason || "Recipient validation skipped" };
+        }
+
+        return row;
+      });
+
+      setRows(updatedRows);
+
+      const invalidCount = updatedRows.filter((r) => !!r.error && !existingErrors.has(r.row)).length;
+      const warningCount = updatedRows.filter((r) => !r.error && !!r.warning).length;
+
+      if (invalidCount > 0) {
+        toast.error(`${invalidCount} recipient(s) failed wallet validation`);
+      }
+
+      if (warningCount > 0 || data?.truncated) {
+        toast.warning("Some recipients could not be validated due to API limits");
+      }
+
+      return updatedRows;
+    } catch {
+      toast.error("Recipient validation unavailable. Continuing with file checks only.");
+      return parsedRows;
+    } finally {
+      setValidatingRecipients(false);
+    }
+  }, []);
 
   const parseFile = useCallback((f: File) => {
     // Read raw content for storage
@@ -55,7 +124,7 @@ const BulkUpload = () => {
     Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         const seen = new Map<string, number>();
         const parsed: ParsedRow[] = results.data.map((raw: any, i: number) => {
           const name = (raw["Recipient Name"] || "").trim();
@@ -79,10 +148,12 @@ const BulkUpload = () => {
         setRows(parsed);
         setValidated(true);
         setBatchName(f.name.replace(/\.(csv|xlsx?)$/i, ""));
+
+        await runRecipientValidation(parsed);
       },
       error: () => toast.error("Failed to parse file"),
     });
-  }, []);
+  }, [runRecipientValidation]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -168,6 +239,7 @@ const BulkUpload = () => {
   };
 
   const errors = rows.filter((r) => r.error);
+  const warnings = rows.filter((r) => !r.error && r.warning);
   const valid = rows.filter((r) => !r.error);
   const totalAmount = valid.reduce((sum, r) => sum + r.amount, 0);
 
@@ -188,6 +260,11 @@ const BulkUpload = () => {
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Bulk Payment Upload</h1>
         <p className="text-sm text-muted-foreground mt-1">Upload CSV files to process bulk disbursements</p>
+        {validatingRecipients && (
+          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
+            <Loader2 size={12} className="animate-spin" /> Validating recipients against MTN wallet records...
+          </p>
+        )}
       </div>
 
       {/* Template Download */}
@@ -243,7 +320,8 @@ const BulkUpload = () => {
               </div>
               <div className="flex items-center gap-2">
                 {!validated && (
-                  <Button size="sm" onClick={handleValidate} className="gap-2">
+                  <Button size="sm" onClick={handleValidate} className="gap-2" disabled={validatingRecipients}>
+                    {validatingRecipients && <Loader2 size={14} className="mr-1 animate-spin" />}
                     Validate File
                   </Button>
                 )}
@@ -265,7 +343,7 @@ const BulkUpload = () => {
             exit={{ opacity: 0, y: -12 }}
             className="space-y-4"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
               <div className="rounded-lg border border-border bg-card p-4 text-center">
                 <p className="text-2xl font-display font-bold">{rows.length}</p>
                 <p className="text-xs text-muted-foreground">Total Records</p>
@@ -277,6 +355,10 @@ const BulkUpload = () => {
               <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-center">
                 <p className="text-2xl font-display font-bold text-destructive">{errors.length}</p>
                 <p className="text-xs text-muted-foreground">Errors</p>
+              </div>
+              <div className="rounded-lg border border-warning/20 bg-warning/5 p-4 text-center">
+                <p className="text-2xl font-display font-bold text-warning">{warnings.length}</p>
+                <p className="text-xs text-muted-foreground">Warnings</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4 text-center">
                 <p className="text-2xl font-display font-bold">ZMW {totalAmount.toLocaleString()}</p>
@@ -322,6 +404,16 @@ const BulkUpload = () => {
                               </TooltipTrigger>
                               <TooltipContent>{row.error}</TooltipContent>
                             </Tooltip>
+                          ) : row.warning ? (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <div className="flex items-center gap-1.5 text-warning">
+                                  <AlertTriangle size={14} />
+                                  <span className="text-xs font-medium">Warning</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>{row.warning}</TooltipContent>
+                            </Tooltip>
                           ) : (
                             <div className="flex items-center gap-1.5 text-success">
                               <CheckCircle2 size={14} />
@@ -342,17 +434,17 @@ const BulkUpload = () => {
                 <p className="text-xs text-muted-foreground">
                   {errors.length > 0
                     ? `${errors.length} errors will be excluded. ${valid.length} valid records will be submitted.`
-                    : `All ${valid.length} records are valid and ready.`}
+                    : `All ${valid.length} records are valid and ready${warnings.length > 0 ? ` (${warnings.length} warning${warnings.length > 1 ? "s" : ""})` : ""}.`}
                 </p>
               </div>
               <div className="flex gap-3">
                 {errors.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={() => handleSubmit(true)} disabled={submitting || valid.length === 0}>
+                  <Button variant="outline" size="sm" onClick={() => handleSubmit(true)} disabled={submitting || valid.length === 0 || validatingRecipients}>
                     {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
                     Exclude Errors & Submit ({valid.length})
                   </Button>
                 )}
-                <Button size="sm" onClick={() => handleSubmit(false)} disabled={submitting || errors.length > 0}>
+                <Button size="sm" onClick={() => handleSubmit(false)} disabled={submitting || errors.length > 0 || validatingRecipients}>
                   {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
                   Submit All
                 </Button>

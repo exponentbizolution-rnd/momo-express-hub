@@ -5,8 +5,7 @@ import {
   Clock,
   CheckCircle,
   Activity,
-  TrendingUp,
-  Loader2,
+  Wallet,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import StatCard from "@/components/StatCard";
@@ -100,6 +99,18 @@ const Dashboard = () => {
     },
   });
 
+  const { data: walletBalance } = useQuery({
+    queryKey: ["wallet-balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("mtn-account-balance");
+      if (error) throw error;
+      return data as { success: boolean; availableBalance: number; currency: string };
+    },
+    retry: 1,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
   // Realtime subscription for batches
   useEffect(() => {
     if (batches) setRealtimeBatches(batches);
@@ -133,6 +144,11 @@ const Dashboard = () => {
     return `ZMW ${amount.toLocaleString()}`;
   };
 
+  const formatWalletBalance = () => {
+    if (!walletBalance?.success) return "Unavailable";
+    return `${walletBalance.currency} ${walletBalance.availableBalance.toLocaleString()}`;
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -140,13 +156,20 @@ const Dashboard = () => {
         <p className="text-sm text-muted-foreground mt-1">Overview of your payment operations</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Total Disbursed"
           value={stats ? formatAmount(stats.totalDisbursed) : "—"}
           subtitle={stats ? `${stats.totalTx.toLocaleString()} transactions` : ""}
           icon={Banknote}
           variant="primary"
+        />
+        <StatCard
+          title="Wallet Balance"
+          value={formatWalletBalance()}
+          subtitle="Live MTN account balance"
+          icon={Wallet}
+          variant="accent"
         />
         <StatCard
           title="Pending Batches"
