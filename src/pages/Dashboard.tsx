@@ -99,6 +99,18 @@ const Dashboard = () => {
     },
   });
 
+  const { data: walletBalance } = useQuery({
+    queryKey: ["wallet-balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("mtn-account-balance");
+      if (error) throw error;
+      return data as { success: boolean; availableBalance: number; currency: string };
+    },
+    retry: 1,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
   // Realtime subscription for batches
   useEffect(() => {
     if (batches) setRealtimeBatches(batches);
