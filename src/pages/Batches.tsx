@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
 
 const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock },
@@ -24,6 +25,7 @@ const Batches = () => {
   const navigate = useNavigate();
   const { user, profile, role } = useAuth();
   const canApprove = role === "approver" || role === "super_admin";
+  const { currency } = useMtnEnvironment();
 
   const { data: batches, isLoading } = useQuery({
     queryKey: ["batches"],
@@ -183,7 +185,7 @@ const Batches = () => {
                       <td className="px-5 py-3 font-mono text-xs">{batch.batch_number}</td>
                       <td className="px-5 py-3 font-medium">{batch.name}</td>
                       <td className="px-5 py-3">{batch.valid_records.toLocaleString()}</td>
-                      <td className="px-5 py-3 font-semibold">ZMW {batch.total_amount.toLocaleString()}</td>
+                      <td className="px-5 py-3 font-semibold">{currency} {batch.total_amount.toLocaleString()}</td>
                       <td className="px-5 py-3 text-muted-foreground">{batch.initiated_by || "—"}</td>
                       <td className="px-5 py-3 text-muted-foreground">{new Date(batch.created_at).toLocaleDateString()}</td>
                       <td className="px-5 py-3">

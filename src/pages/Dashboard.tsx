@@ -22,6 +22,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { Tables } from "@/integrations/supabase/types";
+import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
 
 const statusColor: Record<string, string> = {
   completed: "text-success",
@@ -34,6 +35,7 @@ const statusColor: Record<string, string> = {
 
 const Dashboard = () => {
   const [realtimeBatches, setRealtimeBatches] = useState<Tables<"batches">[]>([]);
+  const { currency } = useMtnEnvironment();
 
   // Fetch batches
   const { data: batches } = useQuery({
@@ -139,9 +141,9 @@ const Dashboard = () => {
   );
 
   const formatAmount = (amount: number) => {
-    if (amount >= 1000000) return `ZMW ${(amount / 1000000).toFixed(1)}M`;
-    if (amount >= 1000) return `ZMW ${(amount / 1000).toFixed(0)}K`;
-    return `ZMW ${amount.toLocaleString()}`;
+    if (amount >= 1000000) return `${currency} ${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 1000) return `${currency} ${(amount / 1000).toFixed(0)}K`;
+    return `${currency} ${amount.toLocaleString()}`;
   };
 
   const formatWalletBalance = () => {
@@ -250,7 +252,7 @@ const Dashboard = () => {
                   <tr key={tx.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-5 py-3 font-medium">{tx.recipient_name}</td>
                     <td className="px-5 py-3 text-muted-foreground">{tx.mobile_number}</td>
-                    <td className="px-5 py-3 font-semibold">ZMW {tx.amount.toLocaleString()}</td>
+                    <td className="px-5 py-3 font-semibold">{currency} {tx.amount.toLocaleString()}</td>
                     <td className={`px-5 py-3 font-medium ${statusColor[tx.status] || ""}`}>
                       {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
                     </td>

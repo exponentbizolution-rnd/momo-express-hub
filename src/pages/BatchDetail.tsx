@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
 import TransactionTimeline from "@/components/TransactionTimeline";
+import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
 
 const txStatusConfig: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock, label: "Pending" },
@@ -37,6 +38,7 @@ const BatchDetail = () => {
   const queryClient = useQueryClient();
   const { profile, role } = useAuth();
   const canRefund = role === "approver" || role === "super_admin";
+  const { currency } = useMtnEnvironment();
   const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
   const [timelineTxId, setTimelineTxId] = useState<string | null>(null);
 
@@ -135,7 +137,7 @@ const BatchDetail = () => {
             {batch.batch_number} — {batch.name}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {batch.total_records} records · ZMW {batch.total_amount.toLocaleString()} · Initiated by {batch.initiated_by || "—"}
+            {batch.total_records} records · {currency} {batch.total_amount.toLocaleString()} · Initiated by {batch.initiated_by || "—"}
           </p>
         </div>
         <Badge variant="outline" className={`ml-auto ${batchStatusConfig[batch.status] || ""}`}>
@@ -202,7 +204,7 @@ const BatchDetail = () => {
                       <td className="px-5 py-3 text-muted-foreground">{tx.row_number ?? "—"}</td>
                       <td className="px-5 py-3 font-medium">{tx.recipient_name}</td>
                       <td className="px-5 py-3 font-mono text-xs">{tx.mobile_number}</td>
-                      <td className="px-5 py-3 font-semibold">ZMW {tx.amount.toLocaleString()}</td>
+                      <td className="px-5 py-3 font-semibold">{currency} {tx.amount.toLocaleString()}</td>
                       <td className="px-5 py-3 text-muted-foreground text-xs">{tx.reference || "—"}</td>
                       <td className="px-5 py-3 font-mono text-xs">{tx.mtn_transaction_id || "—"}</td>
                       <td className="px-5 py-3">

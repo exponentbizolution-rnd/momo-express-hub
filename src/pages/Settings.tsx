@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, AlertTriangle } from "lucide-react";
+import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, AlertTriangle, Save } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
+import { toast } from "sonner";
 
 interface HealthCheckResult {
   success: boolean;
@@ -24,9 +26,38 @@ interface HealthCheckResult {
 }
 
 const Settings = () => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const queryClient = useQueryClient();
+  const { environment: savedEnv, currency, isLoading: envLoading } = useMtnEnvironment();
   const [healthResult, setHealthResult] = useState<HealthCheckResult | null>(null);
   const [selectedEnv, setSelectedEnv] = useState<"sandbox" | "production">("sandbox");
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (!envLoading) {
+      setSelectedEnv(savedEnv);
+    }
+  }, [savedEnv, envLoading]);
+
+  useEffect(() => {
+    setHasChanges(selectedEnv !== savedEnv);
+  }, [selectedEnv, savedEnv]);
+
+  const saveEnvMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("system_settings")
+        .update({ value: selectedEnv, updated_at: new Date().toISOString(), updated_by: user?.id })
+        .eq("key", "mtn_environment");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mtn-environment"] });
+      toast.success(`Environment saved as ${selectedEnv}`);
+      setHasChanges(false);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 
   const healthCheckMutation = useMutation({
     mutationFn: async () => {
@@ -36,9 +67,7 @@ const Settings = () => {
       if (error) throw error;
       return data as HealthCheckResult;
     },
-    onSuccess: (data) => {
-      setHealthResult(data);
-    },
+    onSuccess: (data) => setHealthResult(data),
     onError: (err: Error) => {
       setHealthResult({
         success: false,
@@ -49,10 +78,11 @@ const Settings = () => {
     },
   });
 
-  // Restrict to super_admin only
   if (role !== "super_admin") {
     return <Navigate to="/dashboard" replace />;
   }
+
+  const displayCurrency = selectedEnv === "production" ? "ZMW" : "EUR";
 
   return (
     <div className="space-y-6">
@@ -66,12 +96,7 @@ const Settings = () => {
         </p>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="grid gap-6"
-      >
-        {/* MTN Configuration Card */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -83,7 +108,6 @@ const Settings = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Environment Selector */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Environment Mode</label>
               <Select value={selectedEnv} onValueChange={(v) => setSelectedEnv(v as "sandbox" | "production")}>
@@ -116,6 +140,25 @@ const Settings = () => {
               </Alert>
             )}
 
+            <Button
+              onClick={() => saveEnvMutation.mutate()}
+              disabled={!hasChanges || saveEnvMutation.isPending}
+              className="w-full"
+              variant={hasChanges ? "default" : "secondary"}
+            >
+              {saveEnvMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save size={16} className="mr-2" />
+                  Save Environment
+                </>
+              )}
+            </Button>
+
             <div className="grid gap-3 text-sm">
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Primary Key</span>
@@ -139,15 +182,14 @@ const Settings = () => {
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Currency</span>
-                <Badge variant="outline">
-                  {selectedEnv === "production" ? "ZMW" : "EUR"}
-                </Badge>
+                <Badge variant="outline">{displayCurrency}</Badge>
               </div>
             </div>
 
             <Button
               onClick={() => healthCheckMutation.mutate()}
               disabled={healthCheckMutation.isPending}
+              variant="outline"
               className="w-full"
             >
               {healthCheckMutation.isPending ? (
@@ -163,7 +205,6 @@ const Settings = () => {
               )}
             </Button>
 
-            {/* Health Check Results */}
             {healthResult && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
@@ -180,9 +221,7 @@ const Settings = () => {
                     {healthResult.success ? "All checks passed" : "Some checks failed"}
                   </span>
                 </div>
-
                 <div className="grid gap-2 text-sm">
-                  {/* Token Check */}
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Token Generation</span>
                     {healthResult.tokenError ? (
@@ -193,8 +232,6 @@ const Settings = () => {
                       </Badge>
                     ) : null}
                   </div>
-
-                  {/* Balance Check */}
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Balance API</span>
                     {healthResult.balanceError ? (
@@ -207,8 +244,6 @@ const Settings = () => {
                       </Badge>
                     ) : null}
                   </div>
-
-                  {/* Balance Display */}
                   {healthResult.balance && (
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <span className="text-muted-foreground">Available Balance</span>
@@ -217,12 +252,8 @@ const Settings = () => {
                       </span>
                     </div>
                   )}
-
-                  {/* General Error */}
                   {healthResult.error && (
-                    <div className="text-destructive text-xs mt-2">
-                      Error: {healthResult.error}
-                    </div>
+                    <div className="text-destructive text-xs mt-2">Error: {healthResult.error}</div>
                   )}
                 </div>
               </motion.div>
