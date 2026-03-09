@@ -217,8 +217,16 @@ const BatchDetail = () => {
                       <td className="px-5 py-3 text-xs text-muted-foreground">
                         {tx.processed_at ? new Date(tx.processed_at).toLocaleString() : "—"}
                       </td>
-                      <td className="px-5 py-3">
-                        {canTriggerRefund ? (
+                      <td className="px-5 py-3 flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => setTimelineTxId(tx.id)}
+                        >
+                          <History size={14} className="mr-1" /> History
+                        </Button>
+                        {canTriggerRefund && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -234,8 +242,6 @@ const BatchDetail = () => {
                               </>
                             )}
                           </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
