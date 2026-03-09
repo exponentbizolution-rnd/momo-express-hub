@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2 } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
+import TransactionTimeline from "@/components/TransactionTimeline";
 
 const txStatusConfig: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock, label: "Pending" },
@@ -37,6 +38,7 @@ const BatchDetail = () => {
   const { profile, role } = useAuth();
   const canRefund = role === "approver" || role === "super_admin";
   const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
+  const [timelineTxId, setTimelineTxId] = useState<string | null>(null);
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", batchId],
@@ -215,8 +217,16 @@ const BatchDetail = () => {
                       <td className="px-5 py-3 text-xs text-muted-foreground">
                         {tx.processed_at ? new Date(tx.processed_at).toLocaleString() : "—"}
                       </td>
-                      <td className="px-5 py-3">
-                        {canTriggerRefund ? (
+                      <td className="px-5 py-3 flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => setTimelineTxId(tx.id)}
+                        >
+                          <History size={14} className="mr-1" /> History
+                        </Button>
+                        {canTriggerRefund && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -232,8 +242,6 @@ const BatchDetail = () => {
                               </>
                             )}
                           </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
@@ -244,6 +252,14 @@ const BatchDetail = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Timeline Sheet */}
+      <TransactionTimeline
+        transactionId={timelineTxId || ""}
+        batchId={batchId || ""}
+        open={!!timelineTxId}
+        onOpenChange={(open) => !open && setTimelineTxId(null)}
+      />
     </div>
   );
 };

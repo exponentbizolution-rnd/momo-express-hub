@@ -14,6 +14,7 @@ import Reports from "./pages/Reports";
 import AuditLog from "./pages/AuditLog";
 import UserManagement from "./pages/UserManagement";
 import BatchDetail from "./pages/BatchDetail";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/reports" element={<Reports />} />
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/users" element={<UserManagement />} />
+              <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
