@@ -144,6 +144,11 @@ const Dashboard = () => {
     return `ZMW ${amount.toLocaleString()}`;
   };
 
+  const formatWalletBalance = () => {
+    if (!walletBalance?.success) return "Unavailable";
+    return `${walletBalance.currency} ${walletBalance.availableBalance.toLocaleString()}`;
+  };
+
   return (
     <div className="space-y-8">
       <div>
