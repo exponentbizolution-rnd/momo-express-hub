@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -7,6 +8,8 @@ import {
   Shield,
   Settings,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react";
 import Logo from "./Logo";
 import { cn } from "@/lib/utils";
@@ -14,6 +17,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,7 +30,24 @@ const navItems = [
   { to: "/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
 ];
 
-const AppSidebar = () => {
+function EnvironmentBadge() {
+  const { environment, isProduction } = useMtnEnvironment();
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+        isProduction
+          ? "bg-destructive/15 text-destructive border border-destructive/30"
+          : "bg-success/15 text-success border border-success/30"
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", isProduction ? "bg-destructive animate-pulse" : "bg-success")} />
+      {environment}
+    </span>
+  );
+}
+
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, role, signOut } = useAuth();
@@ -67,13 +89,13 @@ const AppSidebar = () => {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-sidebar border-r border-sidebar-border">
+    <>
       <div className="flex h-16 items-center justify-between px-5 border-b border-sidebar-border">
         <Logo />
         <EnvironmentBadge />
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
         {visibleNav.map((item) => {
           const isActive = location.pathname === item.to;
           const showBadge = item.to === "/batches" && canApprove && pendingCount && pendingCount > 0;
@@ -81,6 +103,7 @@ const AppSidebar = () => {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
@@ -112,7 +135,7 @@ const AppSidebar = () => {
 
       <div className="border-t border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
             {initials}
           </div>
           <div className="min-w-0">
@@ -125,26 +148,40 @@ const AppSidebar = () => {
           </div>
         </div>
       </div>
-    </aside>
-  );
-};
-
-
-function EnvironmentBadge() {
-  const { environment, isProduction } = useMtnEnvironment();
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-        isProduction
-          ? "bg-destructive/15 text-destructive border border-destructive/30"
-          : "bg-success/15 text-success border border-success/30"
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", isProduction ? "bg-destructive animate-pulse" : "bg-success")} />
-      {environment}
-    </span>
+    </>
   );
 }
+
+/** Desktop sidebar (hidden on mobile) */
+function DesktopSidebar() {
+  return (
+    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col bg-sidebar border-r border-sidebar-border">
+      <SidebarContent />
+    </aside>
+  );
+}
+
+/** Mobile sidebar trigger button — exposed for AppLayout header */
+export function MobileSidebarTrigger() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="lg:hidden">
+          <Menu size={20} />
+          <span className="sr-only">Toggle menu</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
+        <SidebarContent onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+const AppSidebar = () => {
+  return <DesktopSidebar />;
+};
 
 export default AppSidebar;
