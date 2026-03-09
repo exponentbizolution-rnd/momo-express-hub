@@ -38,6 +38,7 @@ const BatchDetail = () => {
   const queryClient = useQueryClient();
   const { profile, role } = useAuth();
   const canRefund = role === "approver" || role === "super_admin";
+  const { currency } = useMtnEnvironment();
   const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
   const [timelineTxId, setTimelineTxId] = useState<string | null>(null);
 
