@@ -37,11 +37,46 @@ const Batches = () => {
     },
   });
 
+  const { data: walletBalance } = useQuery({
+    queryKey: ["wallet-balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("mtn-account-balance");
+      if (error) throw error;
+      return data as { success: boolean; availableBalance: number; currency: string };
+    },
+    retry: 1,
+    staleTime: 60_000,
+  });
+
+  const availableBalance = walletBalance?.success ? walletBalance.availableBalance : null;
+  const walletCurrency = walletBalance?.currency || "ZMW";
+
+  const hasInsufficientBalance = (amount: number) =>
+    availableBalance !== null && amount > availableBalance;
+
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status, batch_number, initiator_user_id }: { id: string; status: string; batch_number: string; initiator_user_id: string | null }) => {
+    mutationFn: async ({
+      id,
+      status,
+      batch_number,
+      initiator_user_id,
+      total_amount,
+    }: {
+      id: string;
+      status: string;
+      batch_number: string;
+      initiator_user_id: string | null;
+      total_amount: number;
+    }) => {
       // Enforce dual authorization: approver cannot be the same as initiator
       if (status === "approved" && initiator_user_id === user?.id) {
         throw new Error("You cannot approve a batch you initiated (dual authorization required)");
+      }
+
+      if (status === "approved" && hasInsufficientBalance(total_amount)) {
+        throw new Error(
+          `Insufficient wallet balance. Required ${walletCurrency} ${total_amount.toLocaleString()}, available ${walletCurrency} ${availableBalance?.toLocaleString()}`,
+        );
       }
 
       const { error } = await supabase.from("batches").update({
@@ -73,6 +108,7 @@ const Batches = () => {
     },
     onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
       if (status === "approved") {
         toast.success("Batch approved — disbursements are now processing");
       } else {
@@ -95,6 +131,13 @@ const Batches = () => {
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Batch Management</h1>
         <p className="text-sm text-muted-foreground mt-1">Review, approve, and track payment batches</p>
+        {canApprove && (
+          <p className="text-xs text-muted-foreground mt-2">
+            {availableBalance === null
+              ? "Wallet balance unavailable right now."
+              : `Available wallet balance: ${walletCurrency} ${availableBalance.toLocaleString()}`}
+          </p>
+        )}
       </div>
 
       <motion.div
@@ -128,6 +171,8 @@ const Batches = () => {
               <tbody>
                 {batches.map((batch) => {
                   const config = statusConfig[batch.status] || statusConfig.pending;
+                  const insufficientBalance = hasInsufficientBalance(Number(batch.total_amount));
+
                   return (
                     <tr key={batch.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-5 py-3 font-mono text-xs">{batch.batch_number}</td>
@@ -152,7 +197,24 @@ const Batches = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-success hover:text-success"
-                                onClick={() => updateStatus.mutate({ id: batch.id, status: "approved", batch_number: batch.batch_number, initiator_user_id: batch.initiator_user_id })}
+                                disabled={updateStatus.isPending || insufficientBalance}
+                                title={insufficientBalance ? "Insufficient wallet balance" : "Approve"}
+                                onClick={() => {
+                                  if (insufficientBalance) {
+                                    toast.error(
+                                      `Insufficient wallet balance for ${batch.batch_number}. Required ${walletCurrency} ${Number(batch.total_amount).toLocaleString()}.`,
+                                    );
+                                    return;
+                                  }
+
+                                  updateStatus.mutate({
+                                    id: batch.id,
+                                    status: "approved",
+                                    batch_number: batch.batch_number,
+                                    initiator_user_id: batch.initiator_user_id,
+                                    total_amount: Number(batch.total_amount),
+                                  });
+                                }}
                               >
                                 <CheckCircle size={14} />
                               </Button>
@@ -160,7 +222,14 @@ const Batches = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                onClick={() => updateStatus.mutate({ id: batch.id, status: "cancelled", batch_number: batch.batch_number, initiator_user_id: batch.initiator_user_id })}
+                                disabled={updateStatus.isPending}
+                                onClick={() => updateStatus.mutate({
+                                  id: batch.id,
+                                  status: "cancelled",
+                                  batch_number: batch.batch_number,
+                                  initiator_user_id: batch.initiator_user_id,
+                                  total_amount: Number(batch.total_amount),
+                                })}
                               >
                                 <XCircle size={14} />
                               </Button>
