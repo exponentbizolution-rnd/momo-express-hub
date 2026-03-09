@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
 import TransactionTimeline from "@/components/TransactionTimeline";
+import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
 
 const txStatusConfig: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock, label: "Pending" },
