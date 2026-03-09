@@ -5,8 +5,7 @@ import {
   Clock,
   CheckCircle,
   Activity,
-  TrendingUp,
-  Loader2,
+  Wallet,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import StatCard from "@/components/StatCard";
