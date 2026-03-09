@@ -202,9 +202,14 @@ const Batches = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-success hover:text-success"
-                                disabled={updateStatus.isPending || insufficientBalance}
-                                title={insufficientBalance ? "Insufficient wallet balance" : "Approve"}
+                                disabled={updateStatus.isPending || insufficientBalance || isBalanceUnavailable}
+                                title={insufficientBalance ? "Insufficient wallet balance" : isBalanceUnavailable ? "Wallet balance unavailable" : "Approve"}
                                 onClick={() => {
+                                  if (isBalanceUnavailable) {
+                                    toast.error("Wallet balance is unavailable right now. Please retry in a moment.");
+                                    return;
+                                  }
+
                                   if (insufficientBalance) {
                                     toast.error(
                                       `Insufficient wallet balance for ${batch.batch_number}. Required ${walletCurrency} ${Number(batch.total_amount).toLocaleString()}.`,
