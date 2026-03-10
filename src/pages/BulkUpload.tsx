@@ -128,21 +128,36 @@ const BulkUpload = () => {
       skipEmptyLines: true,
       complete: async (results) => {
         const seen = new Map<string, number>();
+        
+        // Debug: log first row keys and values to identify column names
+        if (results.data.length > 0) {
+          const firstRow = results.data[0] as any;
+          console.log("CSV Column Keys:", Object.keys(firstRow));
+          console.log("CSV First Row:", JSON.stringify(firstRow));
+        }
+        
         const parsed: ParsedRow[] = results.data.map((raw: any, i: number) => {
-          const name = (raw["Recipient Name"] || "").trim();
+          // Flexibly find columns by checking all keys
+          const keys = Object.keys(raw);
+          const nameKey = keys.find((k) => k.toLowerCase().includes("name")) || "Recipient Name";
+          const phoneKey = keys.find((k) => k.toLowerCase().includes("mobile") || k.toLowerCase().includes("phone") || k.toLowerCase().includes("number")) || "Mobile Number";
+          const amountKey = keys.find((k) => k.toLowerCase().includes("amount")) || "Amount";
+          const refKey = keys.find((k) => k.toLowerCase().includes("ref")) || "Reference";
+          const descKey = keys.find((k) => k.toLowerCase().includes("desc")) || "Description";
+
+          const name = (raw[nameKey] || "").toString().trim();
           // Strip ALL non-digit characters from phone, then normalize
-          let phone = (raw["Mobile Number"] || "").toString().replace(/\D/g, "");
+          let phone = (raw[phoneKey] || "").toString().replace(/\D/g, "");
           // Handle local format: 09XXXXXXXX → 2609XXXXXXXX
           if (/^0\d{9}$/.test(phone)) phone = "260" + phone.slice(1);
           // Handle double-zero international: 00260XXXXXXXXX → 260XXXXXXXXX
           if (phone.startsWith("00260")) phone = phone.slice(2);
           
-          // Find amount from any column that starts with "Amount"
-          const amountKey = Object.keys(raw).find((k) => k.toLowerCase().startsWith("amount"));
-          const amountStr = (amountKey ? raw[amountKey] : "0").toString().replace(/,/g, "");
+          const amountStr = (raw[amountKey] || "0").toString().replace(/,/g, "").trim();
           const amount = parseFloat(amountStr) || 0;
-          const reference = (raw["Reference"] || "").trim();
-          const description = (raw["Description"] || "").trim();
+          console.log(`Row ${i+1}: amountKey="${amountKey}", rawValue="${raw[amountKey]}", parsed=${amount}`);
+          const reference = (raw[refKey] || "").toString().trim();
+          const description = (raw[descKey] || "").toString().trim();
 
           let error: string | undefined;
           if (!name) error = "Missing recipient name";
