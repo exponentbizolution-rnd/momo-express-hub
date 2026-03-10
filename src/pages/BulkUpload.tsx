@@ -136,7 +136,7 @@ const BulkUpload = () => {
           if (/^0\d{9}$/.test(phone)) phone = "260" + phone.slice(1);
           // Handle double-zero international: 00260XXXXXXXXX → 260XXXXXXXXX
           if (phone.startsWith("00260")) phone = phone.slice(2);
-          const amountStr = (raw["Amount (ZMW)"] || raw["Amount"] || "0").toString().replace(/,/g, "");
+          const amountStr = (raw[`Amount (${currency})`] || raw["Amount (ZMW)"] || raw["Amount (EUR)"] || raw["Amount"] || "0").toString().replace(/,/g, "");
           const amount = parseFloat(amountStr) || 0;
           const reference = (raw["Reference"] || "").trim();
           const description = (raw["Description"] || "").trim();
