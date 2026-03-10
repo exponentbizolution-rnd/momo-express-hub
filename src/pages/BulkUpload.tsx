@@ -31,8 +31,8 @@ interface RecipientValidationResult {
 
 const validatePhone = (phone: string) => /^260\d{9}$/.test(phone.replace(/\s/g, ""));
 
-const downloadTemplate = (format: "csv") => {
-  const header = "Recipient Name,Mobile Number,Amount (ZMW),Reference,Description";
+const downloadTemplate = (format: "csv", currency: string) => {
+  const header = `Recipient Name,Mobile Number,Amount (${currency}),Reference,Description`;
   const sample = "Grace Banda,260975123456,2500,REF001,January salary";
   const blob = new Blob([header + "\n" + sample], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
