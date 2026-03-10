@@ -255,6 +255,42 @@ const Batches = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={!!confirmBatch} onOpenChange={(open) => !open && setConfirmBatch(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmBatch?.status === "approved" ? "Approve Batch?" : "Reject Batch?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmBatch?.status === "approved"
+                ? `This will approve batch ${confirmBatch?.batch.batch_number} and trigger disbursements of ${currency} ${Number(confirmBatch?.batch.total_amount).toLocaleString()} to ${confirmBatch?.batch.total_records} recipients. This action cannot be undone.`
+                : `This will reject batch ${confirmBatch?.batch.batch_number}. The batch will be cancelled and no payments will be processed.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmBatch?.status === "approved" ? "bg-success text-success-foreground hover:bg-success/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}
+              onClick={() => {
+                if (confirmBatch) {
+                  updateStatus.mutate({
+                    id: confirmBatch.batch.id,
+                    status: confirmBatch.status,
+                    batch_number: confirmBatch.batch.batch_number,
+                    initiator_user_id: confirmBatch.batch.initiator_user_id,
+                    total_amount: Number(confirmBatch.batch.total_amount),
+                  });
+                  setConfirmBatch(null);
+                }
+              }}
+            >
+              {confirmBatch?.status === "approved" ? "Yes, Approve" : "Yes, Reject"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
