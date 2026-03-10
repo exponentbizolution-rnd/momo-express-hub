@@ -236,16 +236,16 @@ const BatchDetail = () => {
                 size="sm"
                 className="bg-success text-success-foreground hover:bg-success/90"
                 disabled={approveMutation.isPending || insufficientBalance || !!isBalanceUnavailable}
-                onClick={() => approveMutation.mutate({ status: "approved" })}
+                onClick={() => setConfirmAction("approved")}
               >
-                {approveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
+                {approveMutation.isPending && confirmAction === "approved" ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
                 Approve
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
                 disabled={approveMutation.isPending}
-                onClick={() => approveMutation.mutate({ status: "cancelled" })}
+                onClick={() => setConfirmAction("cancelled")}
               >
                 <XCircle size={14} className="mr-1" /> Reject
               </Button>
