@@ -126,10 +126,11 @@ const BulkUpload = () => {
     Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: (header: string) => header.replace(/^\uFEFF/, "").trim(),
       complete: async (results) => {
         const seen = new Map<string, number>();
         
-        // Debug: log first row keys and values to identify column names
+        // Debug: log column keys
         if (results.data.length > 0) {
           const firstRow = results.data[0] as any;
           console.log("CSV Column Keys:", Object.keys(firstRow));
@@ -137,27 +138,30 @@ const BulkUpload = () => {
         }
         
         const parsed: ParsedRow[] = results.data.map((raw: any, i: number) => {
-          // Flexibly find columns by checking all keys
-          const keys = Object.keys(raw);
-          const nameKey = keys.find((k) => k.toLowerCase().includes("name")) || "Recipient Name";
-          const phoneKey = keys.find((k) => k.toLowerCase().includes("mobile") || k.toLowerCase().includes("phone") || k.toLowerCase().includes("number")) || "Mobile Number";
-          const amountKey = keys.find((k) => k.toLowerCase().includes("amount")) || "Amount";
-          const refKey = keys.find((k) => k.toLowerCase().includes("ref")) || "Reference";
-          const descKey = keys.find((k) => k.toLowerCase().includes("desc")) || "Description";
+          // Normalize all keys by stripping BOM and trimming
+          const cleanRaw: Record<string, string> = {};
+          for (const [k, v] of Object.entries(raw)) {
+            cleanRaw[k.replace(/^\uFEFF/, "").trim()] = String(v ?? "");
+          }
+          const keys = Object.keys(cleanRaw);
+          
+          const nameKey = keys.find((k) => k.toLowerCase().includes("name")) || keys[0] || "Recipient Name";
+          const phoneKey = keys.find((k) => k.toLowerCase().includes("mobile") || k.toLowerCase().includes("phone") || k.toLowerCase().match(/number/)) || keys[1] || "Mobile Number";
+          // Amount: match "amount" anywhere in key, exclude keys that matched phone
+          const amountKey = keys.find((k) => k.toLowerCase().includes("amount") && k !== phoneKey) || keys[2] || "Amount";
+          const refKey = keys.find((k) => k.toLowerCase().includes("ref")) || keys[3] || "Reference";
+          const descKey = keys.find((k) => k.toLowerCase().includes("desc")) || keys[4] || "Description";
 
-          const name = (raw[nameKey] || "").toString().trim();
-          // Strip ALL non-digit characters from phone, then normalize
-          let phone = (raw[phoneKey] || "").toString().replace(/\D/g, "");
-          // Handle local format: 09XXXXXXXX → 2609XXXXXXXX
+          const name = cleanRaw[nameKey]?.trim() || "";
+          let phone = (cleanRaw[phoneKey] || "").replace(/\D/g, "");
           if (/^0\d{9}$/.test(phone)) phone = "260" + phone.slice(1);
-          // Handle double-zero international: 00260XXXXXXXXX → 260XXXXXXXXX
           if (phone.startsWith("00260")) phone = phone.slice(2);
           
-          const amountStr = (raw[amountKey] || "0").toString().replace(/,/g, "").trim();
+          const amountStr = (cleanRaw[amountKey] || "0").replace(/[^0-9.]/g, "").trim();
           const amount = parseFloat(amountStr) || 0;
-          console.log(`Row ${i+1}: amountKey="${amountKey}", rawValue="${raw[amountKey]}", parsed=${amount}`);
-          const reference = (raw[refKey] || "").toString().trim();
-          const description = (raw[descKey] || "").toString().trim();
+          console.log(`Row ${i+1}: keys=${JSON.stringify(keys)}, amountKey="${amountKey}", rawValue="${cleanRaw[amountKey]}", parsed=${amount}`);
+          const reference = cleanRaw[refKey]?.trim() || "";
+          const description = cleanRaw[descKey]?.trim() || "";
 
           let error: string | undefined;
           if (!name) error = "Missing recipient name";
