@@ -37,6 +37,7 @@ const Batches = () => {
   const { user, profile, role } = useAuth();
   const canApprove = role === "approver" || role === "super_admin";
   const { currency } = useMtnEnvironment();
+  const [confirmBatch, setConfirmBatch] = useState<{ batch: Tables<"batches">; status: "approved" | "cancelled" } | null>(null);
 
   const { data: batches, isLoading } = useQuery({
     queryKey: ["batches"],
