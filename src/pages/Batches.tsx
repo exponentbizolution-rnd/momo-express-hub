@@ -223,21 +223,13 @@ const Batches = () => {
                                     toast.error("Wallet balance is unavailable right now. Please retry in a moment.");
                                     return;
                                   }
-
                                   if (insufficientBalance) {
                                     toast.error(
                                       `Insufficient wallet balance for ${batch.batch_number}. Required ${walletCurrency} ${Number(batch.total_amount).toLocaleString()}.`,
                                     );
                                     return;
                                   }
-
-                                  updateStatus.mutate({
-                                    id: batch.id,
-                                    status: "approved",
-                                    batch_number: batch.batch_number,
-                                    initiator_user_id: batch.initiator_user_id,
-                                    total_amount: Number(batch.total_amount),
-                                  });
+                                  setConfirmBatch({ batch, status: "approved" });
                                 }}
                               >
                                 <CheckCircle size={14} />
@@ -247,13 +239,7 @@ const Batches = () => {
                                 size="sm"
                                 className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                                 disabled={updateStatus.isPending}
-                                onClick={() => updateStatus.mutate({
-                                  id: batch.id,
-                                  status: "cancelled",
-                                  batch_number: batch.batch_number,
-                                  initiator_user_id: batch.initiator_user_id,
-                                  total_amount: Number(batch.total_amount),
-                                })}
+                                onClick={() => setConfirmBatch({ batch, status: "cancelled" })}
                               >
                                 <XCircle size={14} />
                               </Button>
