@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2, History } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2, History, ChevronDown, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import TransactionTimeline from "@/components/TransactionTimeline";
 import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const txStatusConfig: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   pending: { color: "bg-warning/10 text-warning border-warning/20", icon: Clock, label: "Pending" },
@@ -36,11 +37,13 @@ const BatchDetail = () => {
   const { batchId } = useParams<{ batchId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { profile, role } = useAuth();
-  const canRefund = role === "approver" || role === "super_admin";
+  const { user, profile, role } = useAuth();
+  const canApprove = role === "approver" || role === "super_admin";
+  const canRefund = canApprove;
   const { currency } = useMtnEnvironment();
   const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
   const [timelineTxId, setTimelineTxId] = useState<string | null>(null);
+  const [csvOpen, setCsvOpen] = useState(false);
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", batchId],
@@ -70,6 +73,75 @@ const BatchDetail = () => {
     enabled: !!batchId,
   });
 
+  const { data: walletBalance } = useQuery({
+    queryKey: ["wallet-balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("mtn-account-balance");
+      if (error) throw error;
+      return data as { success: boolean; availableBalance: number; currency: string };
+    },
+    retry: 1,
+    staleTime: 60_000,
+    enabled: canApprove && batch?.status === "pending",
+  });
+
+  const availableBalance = walletBalance?.success ? walletBalance.availableBalance : null;
+  const walletCurrency = walletBalance?.currency || "ZMW";
+  const isBalanceUnavailable = canApprove && batch?.status === "pending" && !walletBalance?.success;
+
+  const hasInsufficientBalance = (amount: number) =>
+    availableBalance !== null && amount > availableBalance;
+
+  const approveMutation = useMutation({
+    mutationFn: async ({ status }: { status: "approved" | "cancelled" }) => {
+      if (!batch) throw new Error("Batch not found");
+
+      if (status === "approved" && batch.initiator_user_id === user?.id) {
+        throw new Error("You cannot approve a batch you initiated (dual authorization required)");
+      }
+      if (status === "approved" && isBalanceUnavailable) {
+        throw new Error("Cannot approve while wallet balance is unavailable. Retry in a moment.");
+      }
+      if (status === "approved" && hasInsufficientBalance(Number(batch.total_amount))) {
+        throw new Error(
+          `Insufficient wallet balance. Required ${walletCurrency} ${Number(batch.total_amount).toLocaleString()}, available ${walletCurrency} ${availableBalance?.toLocaleString()}`
+        );
+      }
+
+      const { error } = await supabase.from("batches").update({
+        status,
+        approved_by: status === "approved" ? profile?.full_name : undefined,
+        approver_user_id: status === "approved" ? user?.id : undefined,
+        approved_at: status === "approved" ? new Date().toISOString() : undefined,
+      }).eq("id", batch.id);
+      if (error) throw error;
+
+      await supabase.from("audit_logs").insert({
+        action: `${status === "approved" ? "Approved" : "Rejected"} batch ${batch.batch_number}`,
+        action_type: status === "approved" ? "approve" : "reject",
+        user_name: profile?.full_name || "Unknown",
+        user_role: role || "approver",
+      });
+
+      if (status === "approved") {
+        const { error: fnError } = await supabase.functions.invoke("process-disbursements", {
+          body: { batchId: batch.id },
+        });
+        if (fnError) {
+          throw new Error("Batch approved but disbursement processing failed to start.");
+        }
+      }
+    },
+    onSuccess: (_, { status }) => {
+      queryClient.invalidateQueries({ queryKey: ["batch", batchId] });
+      queryClient.invalidateQueries({ queryKey: ["transactions", batchId] });
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
+      toast.success(status === "approved" ? "Batch approved — disbursements are now processing" : "Batch rejected successfully");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const refundMutation = useMutation({
     mutationFn: async (transactionId: string) => {
       const { data, error } = await supabase.functions.invoke("process-refund", {
@@ -79,26 +151,19 @@ const BatchDetail = () => {
           requestedRole: role || "approver",
         },
       });
-
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Refund failed");
       return data;
     },
-    onMutate: (transactionId) => {
-      setRefundingTxId(transactionId);
-    },
+    onMutate: (transactionId) => setRefundingTxId(transactionId),
     onSuccess: () => {
       toast.success("Refund completed successfully");
       queryClient.invalidateQueries({ queryKey: ["transactions", batchId] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-batches"] });
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Refund failed");
-    },
-    onSettled: () => {
-      setRefundingTxId(null);
-    },
+    onError: (err: Error) => toast.error(err.message || "Refund failed"),
+    onSettled: () => setRefundingTxId(null),
   });
 
   const isLoading = batchLoading || txLoading;
@@ -125,24 +190,57 @@ const BatchDetail = () => {
   const completedCount = transactions?.filter((t) => ["completed", "refunded"].includes(t.status)).length ?? 0;
   const failedCount = transactions?.filter((t) => ["failed", "refund_failed"].includes(t.status)).length ?? 0;
   const pendingCount = transactions?.filter((t) => ["pending", "processing", "refund_processing"].includes(t.status)).length ?? 0;
+  const isPending = batch.status === "pending";
+  const insufficientBalance = hasInsufficientBalance(Number(batch.total_amount));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/batches")}>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate("/batches")}>
           <ArrowLeft size={16} />
         </Button>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-bold tracking-tight">
             {batch.batch_number} — {batch.name}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {batch.total_records} records · {currency} {batch.total_amount.toLocaleString()} · Initiated by {batch.initiated_by || "—"}
           </p>
+          {canApprove && isPending && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {availableBalance === null
+                ? "Wallet balance unavailable right now."
+                : `Available balance: ${walletCurrency} ${availableBalance.toLocaleString()}`}
+            </p>
+          )}
         </div>
-        <Badge variant="outline" className={`ml-auto ${batchStatusConfig[batch.status] || ""}`}>
-          {batch.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={batchStatusConfig[batch.status] || ""}>
+            {batch.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+          </Badge>
+          {isPending && canApprove && (
+            <>
+              <Button
+                size="sm"
+                className="bg-success text-success-foreground hover:bg-success/90"
+                disabled={approveMutation.isPending || insufficientBalance || !!isBalanceUnavailable}
+                onClick={() => approveMutation.mutate({ status: "approved" })}
+              >
+                {approveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={approveMutation.isPending}
+                onClick={() => approveMutation.mutate({ status: "cancelled" })}
+              >
+                <XCircle size={14} className="mr-1" /> Reject
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -164,6 +262,28 @@ const BatchDetail = () => {
           <p className="text-2xl font-bold text-warning mt-1">{pendingCount}</p>
         </div>
       </motion.div>
+
+      {/* CSV Content Viewer */}
+      {batch.csv_content && (
+        <Collapsible open={csvOpen} onOpenChange={setCsvOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              <span className="flex items-center gap-2">
+                <FileText size={16} />
+                Original CSV File {batch.file_name ? `— ${batch.file_name}` : ""}
+              </span>
+              <ChevronDown size={16} className={`transition-transform ${csvOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 rounded-xl border border-border bg-muted/50 overflow-hidden">
+              <div className="overflow-x-auto max-h-80">
+                <pre className="p-4 text-xs font-mono text-foreground whitespace-pre">{batch.csv_content}</pre>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {/* Transactions Table */}
       <motion.div
@@ -220,12 +340,7 @@ const BatchDetail = () => {
                         {tx.processed_at ? new Date(tx.processed_at).toLocaleString() : "—"}
                       </td>
                       <td className="px-5 py-3 flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => setTimelineTxId(tx.id)}
-                        >
+                        <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setTimelineTxId(tx.id)}>
                           <History size={14} className="mr-1" /> History
                         </Button>
                         {canTriggerRefund && (
