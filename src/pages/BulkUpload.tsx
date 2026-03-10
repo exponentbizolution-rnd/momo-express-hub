@@ -289,7 +289,7 @@ const BulkUpload = () => {
             Required columns: Recipient Name, Mobile Number, Amount ({currency}), Reference, Description
           </p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => downloadTemplate("csv")}>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => downloadTemplate("csv", currency)}>
           <Download size={14} />
           CSV Template
         </Button>
