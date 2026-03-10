@@ -128,7 +128,9 @@ const BulkUpload = () => {
         const seen = new Map<string, number>();
         const parsed: ParsedRow[] = results.data.map((raw: any, i: number) => {
           const name = (raw["Recipient Name"] || "").trim();
-          const phone = (raw["Mobile Number"] || "").trim().replace(/\s/g, "");
+          let phone = (raw["Mobile Number"] || "").trim().replace(/[\s\-\(\)]/g, "");
+          if (phone.startsWith("+")) phone = phone.slice(1);
+          if (/^0\d{9}$/.test(phone)) phone = "260" + phone.slice(1);
           const amountStr = (raw["Amount (ZMW)"] || raw["Amount"] || "0").toString().replace(/,/g, "");
           const amount = parseFloat(amountStr) || 0;
           const reference = (raw["Reference"] || "").trim();
