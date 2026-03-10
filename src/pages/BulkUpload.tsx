@@ -226,7 +226,7 @@ const BulkUpload = () => {
 
       // Log audit
       await supabase.from("audit_logs").insert({
-        action: `Uploaded batch ${batch.batch_number} (${validRows.length} records, ZMW ${totalAmount.toLocaleString()})`,
+        action: `Uploaded batch ${batch.batch_number} (${validRows.length} records, ${currency} ${totalAmount.toLocaleString()})`,
         action_type: "upload",
         user_name: profile?.full_name || "Unknown",
         user_role: role || "initiator",
