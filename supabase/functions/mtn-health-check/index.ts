@@ -1,88 +1,42 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
     const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
-    const targetEnv = body.environment || Deno.env.get("MTN_TARGET_ENVIRONMENT") || "sandbox";
+    const targetEnv = Deno.env.get("MTN_TARGET_ENVIRONMENT") || "zambia";
+    const apiUser = Deno.env.get("MTN_API_USER");
+    const apiKey = Deno.env.get("MTN_API_KEY");
 
-    const results: {
-      success: boolean;
-      environment: string;
-      secretsConfigured: { primaryKey: boolean; targetEnv: boolean };
-      tokenLatency?: number;
-      balanceLatency?: number;
-      balance?: { availableBalance: string; currency: string };
-      tokenError?: string;
-      balanceError?: string;
-    } = {
+    const results: Record<string, unknown> = {
       success: false,
-      environment: targetEnv,
+      environment: "production",
       secretsConfigured: {
         primaryKey: !!primaryKey,
         targetEnv: !!Deno.env.get("MTN_TARGET_ENVIRONMENT"),
+        apiUser: !!apiUser,
+        apiKey: !!apiKey,
       },
     };
 
-    if (!primaryKey) {
+    if (!primaryKey || !apiUser || !apiKey) {
       return new Response(
         JSON.stringify({
           ...results,
-          tokenError: "MTN_MOMO_PRIMARY_KEY not configured",
+          tokenError: "Missing required secrets (MTN_MOMO_PRIMARY_KEY, MTN_API_USER, MTN_API_KEY)",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Generate API User and Key for sandbox
-    const apiUser = crypto.randomUUID();
-    const baseUrl =
-      targetEnv === "sandbox"
-        ? "https://sandbox.momodeveloper.mtn.com"
-        : "https://momodeveloper.mtn.com";
-
-    // For sandbox: create API user
-    if (targetEnv === "sandbox") {
-      await fetch(`${baseUrl}/v1_0/apiuser`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Reference-Id": apiUser,
-          "Ocp-Apim-Subscription-Key": primaryKey,
-        },
-        body: JSON.stringify({ providerCallbackHost: "https://example.com" }),
-      });
-
-      await fetch(`${baseUrl}/v1_0/apiuser/${apiUser}/apikey`, {
-        method: "POST",
-        headers: {
-          "Ocp-Apim-Subscription-Key": primaryKey,
-        },
-      });
-    }
-
-    // Get API key
-    const apiKeyRes = await fetch(
-      `${baseUrl}/v1_0/apiuser/${apiUser}/apikey`,
-      {
-        method: "POST",
-        headers: {
-          "Ocp-Apim-Subscription-Key": primaryKey,
-        },
-      }
-    );
-    const apiKeyData = await apiKeyRes.json();
-    const apiKey = apiKeyData.apiKey;
+    const baseUrl = "https://momodeveloper.mtn.com";
 
     // Test 1: Token generation
     const tokenStart = Date.now();
@@ -145,7 +99,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : "Unknown error",
       }),
       {
         status: 500,

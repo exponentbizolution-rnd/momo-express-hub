@@ -12,79 +12,30 @@ interface MtnConfig {
   targetEnvironment: string;
   currency: string;
   primaryKey: string;
-  isProduction: boolean;
 }
 
-async function getMtnConfig(supabase: ReturnType<typeof createClient>): Promise<MtnConfig> {
-  // Read environment from system_settings in database
-  const { data: settingRow } = await supabase
-    .from("system_settings")
-    .select("value")
-    .eq("key", "mtn_environment")
-    .single();
-
-  const isProduction = settingRow?.value === "production";
-
+function getMtnConfig(): MtnConfig {
   const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
   if (!primaryKey) throw new Error("MTN_MOMO_PRIMARY_KEY not configured");
 
-  const baseUrl = isProduction
-    ? "https://momodeveloper.mtn.com"
-    : "https://sandbox.momodeveloper.mtn.com";
-
-  const targetEnvironment = isProduction
-    ? Deno.env.get("MTN_TARGET_ENVIRONMENT") || "zambia"
-    : "sandbox";
-
-  const currency = isProduction ? "ZMW" : "EUR";
+  const baseUrl = "https://momodeveloper.mtn.com";
 
   return {
     baseUrl,
     disbursementUrl: `${baseUrl}/disbursement`,
-    targetEnvironment,
-    currency,
+    targetEnvironment: Deno.env.get("MTN_TARGET_ENVIRONMENT") || "zambia",
+    currency: "ZMW",
     primaryKey,
-    isProduction,
   };
 }
 
-async function getCredentials(config: MtnConfig): Promise<{ apiUser: string; apiKey: string }> {
-  if (config.isProduction) {
-    const apiUser = Deno.env.get("MTN_API_USER");
-    const apiKey = Deno.env.get("MTN_API_KEY");
-    if (!apiUser || !apiKey) {
-      throw new Error("Production requires MTN_API_USER and MTN_API_KEY secrets");
-    }
-    return { apiUser, apiKey };
+function getCredentials(): { apiUser: string; apiKey: string } {
+  const apiUser = Deno.env.get("MTN_API_USER");
+  const apiKey = Deno.env.get("MTN_API_KEY");
+  if (!apiUser || !apiKey) {
+    throw new Error("MTN_API_USER and MTN_API_KEY secrets are required");
   }
-
-  // Sandbox: auto-provision
-  const apiUser = crypto.randomUUID();
-  const callbackHost = Deno.env.get("MTN_CALLBACK_URL") || "https://callback.example.com";
-
-  const createRes = await fetch(`${config.baseUrl}/v1_0/apiuser`, {
-    method: "POST",
-    headers: {
-      "X-Reference-Id": apiUser,
-      "Ocp-Apim-Subscription-Key": config.primaryKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ providerCallbackHost: callbackHost }),
-  });
-  if (!createRes.ok && createRes.status !== 201) {
-    throw new Error(`Create API user failed: ${createRes.status} ${await createRes.text()}`);
-  }
-
-  const keyRes = await fetch(`${config.baseUrl}/v1_0/apiuser/${apiUser}/apikey`, {
-    method: "POST",
-    headers: { "Ocp-Apim-Subscription-Key": config.primaryKey },
-  });
-  if (!keyRes.ok && keyRes.status !== 201) {
-    throw new Error(`Generate API key failed: ${keyRes.status} ${await keyRes.text()}`);
-  }
-  const keyData = await keyRes.json();
-
-  return { apiUser, apiKey: keyData.apiKey };
+  return { apiUser, apiKey };
 }
 
 async function getOAuthToken(config: MtnConfig, apiUser: string, apiKey: string): Promise<string> {
@@ -116,7 +67,7 @@ async function transferFunds(
     "Ocp-Apim-Subscription-Key": config.primaryKey,
     "Content-Type": "application/json",
   };
-  if (callbackUrl && config.isProduction) {
+  if (callbackUrl) {
     headers["X-Callback-Url"] = callbackUrl;
   }
 
@@ -191,23 +142,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const config = await getMtnConfig(supabase);
-    console.log(`Running in ${config.isProduction ? "PRODUCTION" : "SANDBOX"} mode`);
-    console.log(`Target: ${config.targetEnvironment}, Currency: ${config.currency}`);
+    const config = getMtnConfig();
+    console.log(`Running in PRODUCTION mode — Target: ${config.targetEnvironment}, Currency: ${config.currency}`);
 
-    // Get credentials (auto-provision for sandbox, read secrets for production)
-    console.log(config.isProduction ? "Reading production credentials..." : "Provisioning sandbox API User...");
-    const { apiUser, apiKey } = await getCredentials(config);
-
-    // Get OAuth token
-    console.log("Getting OAuth token...");
+    const { apiUser, apiKey } = getCredentials();
     const token = await getOAuthToken(config, apiUser, apiKey);
     console.log("OAuth token obtained");
 
-    // Update batch status to processing
     await dbUpdate(supabase, "batches", { status: "processing" }, "id", batchId, `batch ${batchId} -> processing`);
 
-    // Get all pending transactions for this batch
     const { data: transactions, error: txError } = await supabase
       .from("transactions")
       .select("*")
@@ -289,7 +232,7 @@ Deno.serve(async (req) => {
     await dbUpdate(supabase, "batches", { status: batchStatus }, "id", batchId, `batch ${batchId} -> ${batchStatus}`);
 
     await supabase.from("audit_logs").insert({
-      action: `Processed disbursements (${config.isProduction ? "PRODUCTION" : "SANDBOX"}) for batch ${batchId}: ${successCount} success, ${failCount} failed`,
+      action: `Processed disbursements (PRODUCTION) for batch ${batchId}: ${successCount} success, ${failCount} failed`,
       action_type: "disburse",
       user_name: "System",
       user_role: "system",

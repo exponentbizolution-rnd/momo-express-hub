@@ -9,14 +9,12 @@ import {
   Settings,
   LogOut,
   Menu,
-  X,
 } from "lucide-react";
 import Logo from "./Logo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMtnEnvironment } from "@/hooks/useMtnEnvironment";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
@@ -29,23 +27,6 @@ const navItems = [
   { to: "/users", label: "User Management", icon: Settings, roles: ["super_admin"] },
   { to: "/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
 ];
-
-function EnvironmentBadge() {
-  const { environment, isProduction } = useMtnEnvironment();
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-        isProduction
-          ? "bg-destructive/15 text-destructive border border-destructive/30"
-          : "bg-success/15 text-success border border-success/30"
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", isProduction ? "bg-destructive animate-pulse" : "bg-success")} />
-      {environment}
-    </span>
-  );
-}
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
@@ -92,7 +73,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <div className="flex h-16 items-center justify-between px-5 border-b border-sidebar-border">
         <Logo />
-        <EnvironmentBadge />
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">

@@ -6,75 +6,30 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-interface MtnConfig {
-  baseUrl: string;
-  disbursementUrl: string;
-  targetEnvironment: string;
-  currency: string;
-  primaryKey: string;
-  isProduction: boolean;
-}
-
-function getMtnConfig(): MtnConfig {
-  const isProduction = Deno.env.get("MTN_ENVIRONMENT") === "production";
+function getMtnConfig() {
   const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
   if (!primaryKey) throw new Error("MTN_MOMO_PRIMARY_KEY not configured");
 
-  const baseUrl = isProduction
-    ? "https://momodeveloper.mtn.com"
-    : "https://sandbox.momodeveloper.mtn.com";
-
+  const baseUrl = "https://momodeveloper.mtn.com";
   return {
     baseUrl,
     disbursementUrl: `${baseUrl}/disbursement`,
-    targetEnvironment: isProduction ? Deno.env.get("MTN_TARGET_ENVIRONMENT") || "zambia" : "sandbox",
-    currency: isProduction ? "ZMW" : "EUR",
+    targetEnvironment: Deno.env.get("MTN_TARGET_ENVIRONMENT") || "zambia",
+    currency: "ZMW",
     primaryKey,
-    isProduction,
   };
 }
 
-async function getCredentials(config: MtnConfig): Promise<{ apiUser: string; apiKey: string }> {
-  if (config.isProduction) {
-    const apiUser = Deno.env.get("MTN_API_USER");
-    const apiKey = Deno.env.get("MTN_API_KEY");
-    if (!apiUser || !apiKey) {
-      throw new Error("Production requires MTN_API_USER and MTN_API_KEY secrets");
-    }
-    return { apiUser, apiKey };
+function getCredentials(): { apiUser: string; apiKey: string } {
+  const apiUser = Deno.env.get("MTN_API_USER");
+  const apiKey = Deno.env.get("MTN_API_KEY");
+  if (!apiUser || !apiKey) {
+    throw new Error("MTN_API_USER and MTN_API_KEY secrets are required");
   }
-
-  const apiUser = crypto.randomUUID();
-  const callbackHost = Deno.env.get("MTN_CALLBACK_URL") || "https://callback.example.com";
-
-  const createRes = await fetch(`${config.baseUrl}/v1_0/apiuser`, {
-    method: "POST",
-    headers: {
-      "X-Reference-Id": apiUser,
-      "Ocp-Apim-Subscription-Key": config.primaryKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ providerCallbackHost: callbackHost }),
-  });
-
-  if (!createRes.ok && createRes.status !== 201) {
-    throw new Error(`Create API user failed: ${createRes.status} ${await createRes.text()}`);
-  }
-
-  const keyRes = await fetch(`${config.baseUrl}/v1_0/apiuser/${apiUser}/apikey`, {
-    method: "POST",
-    headers: { "Ocp-Apim-Subscription-Key": config.primaryKey },
-  });
-
-  if (!keyRes.ok && keyRes.status !== 201) {
-    throw new Error(`Generate API key failed: ${keyRes.status} ${await keyRes.text()}`);
-  }
-
-  const keyData = await keyRes.json();
-  return { apiUser, apiKey: keyData.apiKey };
+  return { apiUser, apiKey };
 }
 
-async function getOAuthToken(config: MtnConfig, apiUser: string, apiKey: string): Promise<string> {
+async function getOAuthToken(config: ReturnType<typeof getMtnConfig>, apiUser: string, apiKey: string): Promise<string> {
   const credentials = btoa(`${apiUser}:${apiKey}`);
   const res = await fetch(`${config.disbursementUrl}/token/`, {
     method: "POST",
@@ -83,18 +38,14 @@ async function getOAuthToken(config: MtnConfig, apiUser: string, apiKey: string)
       "Ocp-Apim-Subscription-Key": config.primaryKey,
     },
   });
-
-  if (!res.ok) {
-    throw new Error(`OAuth token failed: ${res.status} ${await res.text()}`);
-  }
-
+  if (!res.ok) throw new Error(`OAuth token failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return data.access_token;
 }
 
 async function requestRefund(
   token: string,
-  config: MtnConfig,
+  config: ReturnType<typeof getMtnConfig>,
   transaction: { id: string; amount: number; mtn_transaction_id: string; recipient_name: string },
 ): Promise<string> {
   const refundReferenceId = crypto.randomUUID();
@@ -127,7 +78,7 @@ async function requestRefund(
 
 async function checkRefundStatus(
   token: string,
-  config: MtnConfig,
+  config: ReturnType<typeof getMtnConfig>,
   refundReferenceId: string,
 ): Promise<{ status: string; reason?: string }> {
   const res = await fetch(`${config.disbursementUrl}/v1_0/refund/${refundReferenceId}`, {
@@ -139,10 +90,7 @@ async function checkRefundStatus(
     },
   });
 
-  if (!res.ok) {
-    throw new Error(`Refund status check failed: ${res.status} ${await res.text()}`);
-  }
-
+  if (!res.ok) throw new Error(`Refund status check failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return { status: data.status, reason: data.reason?.message };
 }
@@ -188,7 +136,7 @@ Deno.serve(async (req) => {
       .eq("id", transaction.id);
 
     const config = getMtnConfig();
-    const { apiUser, apiKey } = await getCredentials(config);
+    const { apiUser, apiKey } = getCredentials();
     const token = await getOAuthToken(config, apiUser, apiKey);
 
     const refundReferenceId = await requestRefund(token, config, {
