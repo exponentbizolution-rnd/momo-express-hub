@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const baseUrl = "https://momodeveloper.mtn.com";
+    const baseUrl = "https://proxy.momoapi.mtn.com";
 
     // Test 1: Token generation
     const tokenStart = Date.now();
