@@ -18,7 +18,7 @@ function getMtnConfig(): MtnConfig {
   const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
   if (!primaryKey) throw new Error("MTN_MOMO_PRIMARY_KEY not configured");
 
-  const baseUrl = "https://momodeveloper.mtn.com";
+  const baseUrl = "https://proxy.momoapi.mtn.com";
 
   return {
     baseUrl,
