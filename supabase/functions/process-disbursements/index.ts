@@ -129,25 +129,43 @@ async function dbUpdate(
   console.log(`[DB UPDATE OK] ${context}`);
 }
 
+function simulateTransfer(): { status: string; reason?: string } {
+  // 80% success, 20% failure for realistic simulation
+  const rand = Math.random();
+  if (rand < 0.8) {
+    return { status: "completed" };
+  }
+  return { status: "failed", reason: "Simulated failure for QA testing" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { batchId } = await req.json();
+    const { batchId, testMode } = await req.json();
     if (!batchId) throw new Error("batchId is required");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const config = getMtnConfig();
-    console.log(`Running in PRODUCTION mode — Target: ${config.targetEnvironment}, Currency: ${config.currency}`);
+    const isTestMode = testMode === true;
+    const modeLabel = isTestMode ? "TEST MODE" : "PRODUCTION";
 
-    const { apiUser, apiKey } = getCredentials();
-    const token = await getOAuthToken(config, apiUser, apiKey);
-    console.log("OAuth token obtained");
+    let config: MtnConfig | null = null;
+    let token: string | null = null;
+
+    if (!isTestMode) {
+      config = getMtnConfig();
+      console.log(`Running in PRODUCTION mode — Target: ${config.targetEnvironment}, Currency: ${config.currency}`);
+      const { apiUser, apiKey } = getCredentials();
+      token = await getOAuthToken(config, apiUser, apiKey);
+      console.log("OAuth token obtained");
+    } else {
+      console.log("Running in TEST MODE — No real API calls will be made");
+    }
 
     await dbUpdate(supabase, "batches", { status: "processing" }, "id", batchId, `batch ${batchId} -> processing`);
 
@@ -175,40 +193,64 @@ Deno.serve(async (req) => {
         console.log(`[Txn ${txn.id}] Processing -> ${txn.mobile_number}, amount: ${txn.amount}`);
         await dbUpdate(supabase, "transactions", { status: "processing" }, "id", txn.id, `txn ${txn.id} -> processing`);
 
-        const { referenceId } = await transferFunds(token, config, txn);
-        console.log(`[Txn ${txn.id}] Transfer initiated, ref: ${referenceId}`);
+        if (isTestMode) {
+          // Simulate processing delay
+          await sleep(500);
+          const simResult = simulateTransfer();
+          const referenceId = `TEST-${crypto.randomUUID().slice(0, 8)}`;
 
-        let finalStatus = "pending";
-        let reason: string | undefined;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          await sleep(2000);
-          const statusResult = await checkTransferStatus(token, config, referenceId);
-          console.log(`[Txn ${txn.id}] Status check ${attempt + 1}/5: ${statusResult.status}`);
-          if (statusResult.status === "SUCCESSFUL") {
-            finalStatus = "completed";
-            break;
-          } else if (statusResult.status === "FAILED") {
-            finalStatus = "failed";
-            reason = statusResult.reason;
-            break;
+          if (simResult.status === "completed") {
+            await dbUpdate(supabase, "transactions", {
+              status: "completed",
+              mtn_transaction_id: referenceId,
+              processed_at: new Date().toISOString(),
+            }, "id", txn.id, `txn ${txn.id} -> completed (test)`);
+            successCount++;
+          } else {
+            await dbUpdate(supabase, "transactions", {
+              status: "failed",
+              mtn_transaction_id: referenceId,
+              error_message: simResult.reason || "Simulated failure",
+              retry_count: txn.retry_count + 1,
+            }, "id", txn.id, `txn ${txn.id} -> failed (test)`);
+            failCount++;
           }
-        }
-
-        if (finalStatus === "completed") {
-          await dbUpdate(supabase, "transactions", {
-            status: "completed",
-            mtn_transaction_id: referenceId,
-            processed_at: new Date().toISOString(),
-          }, "id", txn.id, `txn ${txn.id} -> completed`);
-          successCount++;
         } else {
-          await dbUpdate(supabase, "transactions", {
-            status: "failed",
-            mtn_transaction_id: referenceId,
-            error_message: reason || `Transfer status: ${finalStatus}`,
-            retry_count: txn.retry_count + 1,
-          }, "id", txn.id, `txn ${txn.id} -> failed`);
-          failCount++;
+          const { referenceId } = await transferFunds(token!, config!, txn);
+          console.log(`[Txn ${txn.id}] Transfer initiated, ref: ${referenceId}`);
+
+          let finalStatus = "pending";
+          let reason: string | undefined;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            await sleep(2000);
+            const statusResult = await checkTransferStatus(token!, config!, referenceId);
+            console.log(`[Txn ${txn.id}] Status check ${attempt + 1}/5: ${statusResult.status}`);
+            if (statusResult.status === "SUCCESSFUL") {
+              finalStatus = "completed";
+              break;
+            } else if (statusResult.status === "FAILED") {
+              finalStatus = "failed";
+              reason = statusResult.reason;
+              break;
+            }
+          }
+
+          if (finalStatus === "completed") {
+            await dbUpdate(supabase, "transactions", {
+              status: "completed",
+              mtn_transaction_id: referenceId,
+              processed_at: new Date().toISOString(),
+            }, "id", txn.id, `txn ${txn.id} -> completed`);
+            successCount++;
+          } else {
+            await dbUpdate(supabase, "transactions", {
+              status: "failed",
+              mtn_transaction_id: referenceId,
+              error_message: reason || `Transfer status: ${finalStatus}`,
+              retry_count: txn.retry_count + 1,
+            }, "id", txn.id, `txn ${txn.id} -> failed`);
+            failCount++;
+          }
         }
 
         await sleep(100);
@@ -232,16 +274,16 @@ Deno.serve(async (req) => {
     await dbUpdate(supabase, "batches", { status: batchStatus }, "id", batchId, `batch ${batchId} -> ${batchStatus}`);
 
     await supabase.from("audit_logs").insert({
-      action: `Processed disbursements (PRODUCTION) for batch ${batchId}: ${successCount} success, ${failCount} failed`,
+      action: `Processed disbursements (${modeLabel}) for batch ${batchId}: ${successCount} success, ${failCount} failed`,
       action_type: "disburse",
       user_name: "System",
       user_role: "system",
     });
 
-    console.log(`Batch ${batchId} complete: ${successCount} success, ${failCount} failed`);
+    console.log(`Batch ${batchId} complete (${modeLabel}): ${successCount} success, ${failCount} failed`);
 
     return new Response(
-      JSON.stringify({ success: true, processed: transactions.length, successCount, failCount, status: batchStatus }),
+      JSON.stringify({ success: true, processed: transactions.length, successCount, failCount, status: batchStatus, testMode: isTestMode }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

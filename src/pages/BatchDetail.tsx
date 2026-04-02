@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2, History, ChevronDown, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, Clock, RefreshCw, Undo2, History, ChevronDown, FileText, FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
