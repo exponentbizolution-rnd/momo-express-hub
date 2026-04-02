@@ -413,7 +413,9 @@ const BatchDetail = () => {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction === "approved"
-                ? `This will approve batch ${batch?.batch_number} and trigger disbursements of ${currency} ${Number(batch?.total_amount).toLocaleString()} to ${batch?.total_records} recipients. This action cannot be undone.`
+                ? testMode
+                  ? `This will run batch ${batch?.batch_number} in TEST MODE — no real money will be sent. Transactions will be simulated with ~80% success rate for QA purposes.`
+                  : `This will approve batch ${batch?.batch_number} and trigger disbursements of ${currency} ${Number(batch?.total_amount).toLocaleString()} to ${batch?.total_records} recipients. This action cannot be undone.`
                 : `This will reject batch ${batch?.batch_number}. The batch will be cancelled and no payments will be processed.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
