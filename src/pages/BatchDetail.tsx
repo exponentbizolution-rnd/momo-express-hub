@@ -57,6 +57,7 @@ const BatchDetail = () => {
   const [timelineTxId, setTimelineTxId] = useState<string | null>(null);
   const [csvOpen, setCsvOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"approved" | "cancelled" | null>(null);
+  const [testMode, setTestMode] = useState(false);
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", batchId],
