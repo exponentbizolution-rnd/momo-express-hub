@@ -235,14 +235,26 @@ const BatchDetail = () => {
           </Badge>
           {isPending && canApprove && (
             <>
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5">
+                <FlaskConical size={14} className={testMode ? "text-warning" : "text-muted-foreground"} />
+                <Label htmlFor="test-mode" className="text-xs font-medium cursor-pointer">
+                  Test Mode
+                </Label>
+                <Switch
+                  id="test-mode"
+                  checked={testMode}
+                  onCheckedChange={setTestMode}
+                  className="scale-75"
+                />
+              </div>
               <Button
                 size="sm"
-                className="bg-success text-success-foreground hover:bg-success/90"
-                disabled={approveMutation.isPending || insufficientBalance || !!isBalanceUnavailable}
+                className={testMode ? "bg-warning text-warning-foreground hover:bg-warning/90" : "bg-success text-success-foreground hover:bg-success/90"}
+                disabled={approveMutation.isPending || (!testMode && (insufficientBalance || !!isBalanceUnavailable))}
                 onClick={() => setConfirmAction("approved")}
               >
                 {approveMutation.isPending && confirmAction === "approved" ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
-                Approve
+                {testMode ? "Test Approve" : "Approve"}
               </Button>
               <Button
                 size="sm"
