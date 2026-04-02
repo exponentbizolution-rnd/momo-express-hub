@@ -139,7 +139,7 @@ const BatchDetail = () => {
 
       if (status === "approved") {
         const { error: fnError } = await supabase.functions.invoke("process-disbursements", {
-          body: { batchId: batch.id },
+          body: { batchId: batch.id, testMode },
         });
         if (fnError) {
           throw new Error("Batch approved but disbursement processing failed to start.");
