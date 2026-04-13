@@ -29,6 +29,16 @@ const Login = () => {
     }
   }, []);
 
+  const checkLockout = async () => {
+    if (!email) return;
+    const { data } = await supabase.rpc("check_login_lockout", { p_email: email });
+    if (data?.locked) {
+      setLockout({ locked: true, lockedUntil: data.locked_until, attempts: data.attempts });
+    } else {
+      setLockout({ locked: false, attempts: data?.attempts ?? 0 });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -46,8 +56,36 @@ const Login = () => {
         if (error) throw error;
         toast.success("Check your email for a confirmation link!");
       } else {
+        // Check lockout before attempting login
+        const { data: lockData } = await supabase.rpc("check_login_lockout", { p_email: email });
+        if (lockData?.locked) {
+          const until = new Date(lockData.locked_until);
+          const mins = Math.ceil((until.getTime() - Date.now()) / 60000);
+          setLockout({ locked: true, lockedUntil: lockData.locked_until, attempts: lockData.attempts });
+          toast.error(`Account locked. Try again in ${mins} minute${mins !== 1 ? "s" : ""}.`);
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          // Record failed attempt
+          const { data: failData } = await supabase.rpc("record_failed_login", { p_email: email });
+          if (failData?.locked) {
+            setLockout({ locked: true, lockedUntil: failData.locked_until, attempts: failData.attempts });
+            toast.error("Too many failed attempts. Account locked for 15 minutes.");
+          } else {
+            const remaining = 5 - (failData?.attempts ?? 0);
+            setLockout({ locked: false, attempts: failData?.attempts ?? 0 });
+            toast.error(`Invalid credentials. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`);
+          }
+          setLoading(false);
+          return;
+        }
+
+        // Success — clear failed attempts
+        await supabase.rpc("clear_failed_logins", { p_email: email });
+        setLockout({ locked: false, attempts: 0 });
         navigate("/dashboard");
       }
     } catch (err: any) {
