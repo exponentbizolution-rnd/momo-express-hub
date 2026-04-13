@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { format, isWithinInterval, startOfDay, endOfDay, subDays, startOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 
 type ReportKey = "payment_summary" | "transaction_detail" | "failed_transactions" | "reconciliation" | "audit_log";
@@ -295,7 +295,26 @@ const Reports = () => {
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <div className="p-3 space-y-3">
-                <div>
+                {/* Quick presets */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "Today", from: new Date(), to: new Date() },
+                    { label: "Last 7 days", from: subDays(new Date(), 6), to: new Date() },
+                    { label: "Last 30 days", from: subDays(new Date(), 29), to: new Date() },
+                    { label: "This month", from: startOfMonth(new Date()), to: new Date() },
+                  ].map(preset => (
+                    <Button
+                      key={preset.label}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => { setDateFrom(preset.from); setDateTo(preset.to); }}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="border-t border-border pt-3">
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">From</p>
                   <Calendar
                     mode="single"
@@ -345,7 +364,7 @@ const Reports = () => {
               <h3 className="font-display text-sm font-semibold mb-1">{report.name}</h3>
               <p className="text-xs text-muted-foreground">{report.description}</p>
             </div>
-            <div className="flex gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-4">
               <Button
                 variant="ghost"
                 size="sm"
@@ -363,7 +382,7 @@ const Reports = () => {
                     key={fmt}
                     variant="outline"
                     size="sm"
-                    className="flex-1 gap-1.5 text-xs"
+                    className="flex-1 min-w-[60px] gap-1.5 text-xs"
                     disabled={!!loading || !!previewLoading}
                     onClick={() => handleDownload(report, fmt)}
                   >
@@ -379,7 +398,7 @@ const Reports = () => {
 
       {/* Preview Dialog */}
       <Dialog open={!!previewData} onOpenChange={(open) => !open && setPreviewData(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="max-w-4xl max-h-[85vh] w-[95vw] sm:w-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {previewData?.report.name}
