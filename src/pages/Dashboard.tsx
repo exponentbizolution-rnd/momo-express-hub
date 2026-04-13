@@ -152,10 +152,10 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Overview of your payment operations</p>
+        <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">Overview of your payment operations</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
