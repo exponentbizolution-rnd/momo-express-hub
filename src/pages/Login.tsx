@@ -32,10 +32,11 @@ const Login = () => {
   const checkLockout = async () => {
     if (!email) return;
     const { data } = await supabase.rpc("check_login_lockout", { p_email: email });
-    if (data?.locked) {
-      setLockout({ locked: true, lockedUntil: data.locked_until, attempts: data.attempts });
+    const d = data as Record<string, any> | null;
+    if (d?.locked) {
+      setLockout({ locked: true, lockedUntil: d.locked_until, attempts: d.attempts });
     } else {
-      setLockout({ locked: false, attempts: data?.attempts ?? 0 });
+      setLockout({ locked: false, attempts: d?.attempts ?? 0 });
     }
   };
 
@@ -57,7 +58,8 @@ const Login = () => {
         toast.success("Check your email for a confirmation link!");
       } else {
         // Check lockout before attempting login
-        const { data: lockData } = await supabase.rpc("check_login_lockout", { p_email: email });
+        const { data: lockRaw } = await supabase.rpc("check_login_lockout", { p_email: email });
+        const lockData = lockRaw as Record<string, any> | null;
         if (lockData?.locked) {
           const until = new Date(lockData.locked_until);
           const mins = Math.ceil((until.getTime() - Date.now()) / 60000);
@@ -70,7 +72,8 @@ const Login = () => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           // Record failed attempt
-          const { data: failData } = await supabase.rpc("record_failed_login", { p_email: email });
+          const { data: failRaw } = await supabase.rpc("record_failed_login", { p_email: email });
+          const failData = failRaw as Record<string, any> | null;
           if (failData?.locked) {
             setLockout({ locked: true, lockedUntil: failData.locked_until, attempts: failData.attempts });
             toast.error("Too many failed attempts. Account locked for 15 minutes.");
