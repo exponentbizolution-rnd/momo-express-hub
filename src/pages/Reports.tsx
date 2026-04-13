@@ -398,7 +398,7 @@ const Reports = () => {
 
       {/* Preview Dialog */}
       <Dialog open={!!previewData} onOpenChange={(open) => !open && setPreviewData(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="max-w-4xl max-h-[85vh] w-[95vw] sm:w-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {previewData?.report.name}
