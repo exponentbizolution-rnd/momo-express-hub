@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { format, isWithinInterval, startOfDay, endOfDay, subDays, startOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 
 type ReportKey = "payment_summary" | "transaction_detail" | "failed_transactions" | "reconciliation" | "audit_log";
