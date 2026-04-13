@@ -1,8 +1,11 @@
 import { Outlet } from "react-router-dom";
 import AppSidebar, { MobileSidebarTrigger } from "./AppSidebar";
 import { Bell } from "lucide-react";
+import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 
 const AppLayout = () => {
+  useIdleTimeout();
+
   return (
     <div className="flex min-h-screen bg-background">
       <AppSidebar />
