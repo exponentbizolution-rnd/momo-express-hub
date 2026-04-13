@@ -5,6 +5,7 @@ import { Zap, Eye, EyeOff, Lock, Mail, User, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -17,6 +18,9 @@ const Login = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [lockout, setLockout] = useState<{ locked: boolean; lockedUntil?: string; attempts: number }>({ locked: false, attempts: 0 });
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   // Handle email confirmation redirect — sign out the auto-session and prompt manual login
   useEffect(() => {
@@ -263,26 +267,66 @@ const Login = () => {
               <button
                 type="button"
                 className="text-sm text-primary font-medium hover:underline"
-                onClick={async () => {
-                  if (!email) {
-                    toast.error("Enter your email address first.");
-                    return;
-                  }
-                  try {
-                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                      redirectTo: `${window.location.origin}/reset-password`,
-                    });
-                    if (error) throw error;
-                    toast.success("Password reset link sent! Check your email.");
-                  } catch (err: any) {
-                    toast.error(err.message || "Failed to send reset link.");
-                  }
+                onClick={() => {
+                  setResetEmail("");
+                  setForgotOpen(true);
                 }}
               >
                 Forgot password?
               </button>
             </div>
           )}
+
+          <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reset your password</DialogTitle>
+                <DialogDescription>
+                  Enter your email address and we'll send you a link to reset your password.
+                </DialogDescription>
+              </DialogHeader>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!resetEmail) return;
+                  setIsResetting(true);
+                  try {
+                    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+                      redirectTo: `${window.location.origin}/reset-password`,
+                    });
+                    if (error) throw error;
+                    toast.success("Password reset link sent! Check your email.");
+                    setForgotOpen(false);
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to send reset link.");
+                  } finally {
+                    setIsResetting(false);
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="resetEmail">Email Address</Label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="resetEmail"
+                      type="email"
+                      placeholder="you@company.com"
+                      className="pl-9"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full" disabled={isResetting}>
+                  {isResetting ? "Sending..." : "Send Reset Link"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
