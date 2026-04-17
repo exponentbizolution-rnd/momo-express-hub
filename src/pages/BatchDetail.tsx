@@ -414,16 +414,14 @@ const BatchDetail = () => {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction === "approved"
-                ? testMode
-                  ? `This will run batch ${batch?.batch_number} in TEST MODE — no real money will be sent. Transactions will be simulated with ~80% success rate for QA purposes.`
-                  : `This will approve batch ${batch?.batch_number} and trigger disbursements of ${currency} ${Number(batch?.total_amount).toLocaleString()} to ${batch?.total_records} recipients. This action cannot be undone.`
+                ? `This will approve batch ${batch?.batch_number} and trigger disbursements of ${currency} ${Number(batch?.total_amount).toLocaleString()} to ${batch?.total_records} recipients. This action cannot be undone.`
                 : `This will reject batch ${batch?.batch_number}. The batch will be cancelled and no payments will be processed.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className={confirmAction === "approved" ? (testMode ? "bg-warning text-warning-foreground hover:bg-warning/90" : "bg-success text-success-foreground hover:bg-success/90") : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}
+              className={confirmAction === "approved" ? "bg-success text-success-foreground hover:bg-success/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}
               onClick={() => {
                 if (confirmAction) {
                   approveMutation.mutate({ status: confirmAction });
