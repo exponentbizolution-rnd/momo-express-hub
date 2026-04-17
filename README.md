@@ -5,7 +5,7 @@
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
 ## How can I edit this code?
-This is a new edit 
+This is a new edit  from my local pc to the web
 
 There are several ways of editing your application.
 
