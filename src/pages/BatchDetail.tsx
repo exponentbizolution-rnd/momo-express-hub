@@ -144,7 +144,7 @@ const BatchDetail = () => {
 
       if (status === "approved") {
         const { error: fnError } = await supabase.functions.invoke("process-disbursements", {
-          body: { batchId: batch.id, testMode },
+          body: { batchId: batch.id },
         });
         if (fnError) {
           throw new Error("Batch approved but disbursement processing failed to start.");
@@ -156,7 +156,7 @@ const BatchDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["transactions", batchId] });
       queryClient.invalidateQueries({ queryKey: ["batches"] });
       queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
-      toast.success(status === "approved" ? (testMode ? "Batch approved — TEST MODE disbursements processing" : "Batch approved — disbursements are now processing") : "Batch rejected successfully");
+      toast.success(status === "approved" ? "Batch approved — disbursements are now processing" : "Batch rejected successfully");
     },
     onError: (err: Error) => toast.error(err.message),
   });
