@@ -15,7 +15,6 @@ Deno.serve(async (req) => {
 
   try {
     const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY") || "";
-    const secondaryKey = Deno.env.get("MTN_MOMO_SECONDARY_KEY") || "";
     const targetEnv = Deno.env.get("MTN_TARGET_ENVIRONMENT") || "";
     const apiUser = Deno.env.get("MTN_API_USER") || "";
     const apiKey = Deno.env.get("MTN_API_KEY") || "";
@@ -25,7 +24,6 @@ Deno.serve(async (req) => {
 
     diagnostics.secrets = {
       MTN_MOMO_PRIMARY_KEY: mask(primaryKey),
-      MTN_MOMO_SECONDARY_KEY: mask(secondaryKey),
       MTN_TARGET_ENVIRONMENT: targetEnv || "(missing)",
       MTN_API_USER: mask(apiUser),
       MTN_API_KEY: mask(apiKey),
@@ -42,37 +40,6 @@ Deno.serve(async (req) => {
     const baseUrl = "https://proxy.momoapi.mtn.com";
     const tokenUrl = `${baseUrl}/disbursement/token/`;
     const credentials = btoa(`${apiUser}:${apiKey}`);
-
-    // Step 1: Validate that the API User exists & is provisioned for this subscription key
-    const apiUserUrl = `${baseUrl}/v1_0/apiuser/${apiUser}`;
-    const apiUserHeaders = {
-      "Ocp-Apim-Subscription-Key": primaryKey,
-    };
-
-    diagnostics.step1_apiUserCheck = {
-      method: "GET",
-      url: apiUserUrl,
-      headers: { "Ocp-Apim-Subscription-Key": mask(primaryKey) },
-    };
-
-    try {
-      const t0 = Date.now();
-      const apiUserRes = await fetch(apiUserUrl, {
-        method: "GET",
-        headers: apiUserHeaders,
-      });
-      const apiUserText = await apiUserRes.text();
-      (diagnostics.step1_apiUserCheck as Record<string, unknown>).response = {
-        status: apiUserRes.status,
-        statusText: apiUserRes.statusText,
-        latencyMs: Date.now() - t0,
-        headers: Object.fromEntries(apiUserRes.headers.entries()),
-        body: apiUserText,
-      };
-    } catch (e) {
-      (diagnostics.step1_apiUserCheck as Record<string, unknown>).fetchError =
-        e instanceof Error ? e.message : String(e);
-    }
 
     // Step 2: Token request — primary key
     diagnostics.step2_tokenPrimary = {
