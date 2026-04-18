@@ -59,7 +59,47 @@ async function transferFunds(
 ): Promise<{ referenceId: string }> {
   const referenceId = crypto.randomUUID();
   const callbackUrl = Deno.env.get("MTN_CALLBACK_URL");
+  const proxyUrl = Deno.env.get("LINODE_PROXY_URL");
+  const proxySecret = Deno.env.get("LINODE_PROXY_SECRET");
 
+  const body = JSON.stringify({
+    amount: txn.amount.toString(),
+    currency: config.currency,
+    externalId: txn.id,
+    payee: { partyIdType: "MSISDN", partyId: txn.mobile_number },
+    payerMessage: `Payment to ${txn.recipient_name}`,
+    payeeNote: `Disbursement ${txn.id}`,
+  });
+
+  // Route the transfer call through the Linode proxy so MTN sees the
+  // whitelisted static IP. Token + status checks still go direct from the
+  // edge function (those endpoints are not IP-restricted).
+  if (proxyUrl && proxySecret) {
+    const proxyRes = await fetch(`${proxyUrl.replace(/\/$/, "")}/mtn/transfer`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-proxy-secret": proxySecret,
+        "x-mtn-token": token,
+        "x-mtn-reference-id": referenceId,
+        "x-mtn-target-environment": config.targetEnvironment,
+        "x-mtn-subscription-key": config.primaryKey,
+        ...(callbackUrl ? { "x-mtn-callback-url": callbackUrl } : {}),
+      },
+      body,
+    });
+
+    const proxyJson = await proxyRes.json().catch(() => ({}));
+    const mtnStatus = proxyJson.mtnStatus ?? proxyRes.status;
+    const mtnBody = proxyJson.mtnBody ?? "";
+
+    if (!proxyRes.ok || (mtnStatus !== 202 && mtnStatus >= 300)) {
+      throw new Error(`Transfer failed via proxy: ${mtnStatus} ${mtnBody}`);
+    }
+    return { referenceId };
+  }
+
+  // Fallback: direct call (will hit dynamic edge IPs — likely 403 in prod)
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     "X-Reference-Id": referenceId,
@@ -67,28 +107,18 @@ async function transferFunds(
     "Ocp-Apim-Subscription-Key": config.primaryKey,
     "Content-Type": "application/json",
   };
-  if (callbackUrl) {
-    headers["X-Callback-Url"] = callbackUrl;
-  }
+  if (callbackUrl) headers["X-Callback-Url"] = callbackUrl;
 
   const res = await fetch(`${config.disbursementUrl}/v1_0/transfer`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      amount: txn.amount.toString(),
-      currency: config.currency,
-      externalId: txn.id,
-      payee: { partyIdType: "MSISDN", partyId: txn.mobile_number },
-      payerMessage: `Payment to ${txn.recipient_name}`,
-      payeeNote: `Disbursement ${txn.id}`,
-    }),
+    body,
   });
 
   if (!res.ok && res.status !== 202) {
     const errText = await res.text();
-    throw new Error(`Transfer failed: ${res.status} ${errText}`);
+    throw new Error(`Transfer failed (direct): ${res.status} ${errText}`);
   }
-
   return { referenceId };
 }
 

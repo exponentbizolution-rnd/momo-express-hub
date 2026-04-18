@@ -1,0 +1,13 @@
+{
+  "name": "mtn-transfer-proxy",
+  "version": "1.0.0",
+  "description": "Linode proxy that forwards MTN MoMo transfer calls from Lovable Cloud edge functions, so MTN sees the whitelisted IP.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
