@@ -148,8 +148,7 @@ const DiagnoseMtn = () => {
               </CardContent>
             </Card>
 
-            {renderStep("step1_apiUserCheck", "Step 1 — API User Validation (GET /v1_0/apiuser/{user})")}
-            {renderStep("step2_tokenPrimary", "Step 2 — OAuth Token (Primary Key)")}
+            {renderStep("step2_tokenPrimary", "Step 1 — OAuth Token (Primary Key)")}
 
             {Array.isArray(result.step3_balanceProbes) && (
               <Card>
