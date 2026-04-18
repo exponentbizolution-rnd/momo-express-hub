@@ -7,6 +7,7 @@ import {
   BarChart3,
   Shield,
   Settings,
+  Stethoscope,
   LogOut,
   Menu,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const navItems = [
   { to: "/audit", label: "Audit Log", icon: Shield },
   { to: "/users", label: "User Management", icon: Settings, roles: ["super_admin"] },
   { to: "/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
+  { to: "/diagnose-mtn", label: "Diagnose MTN", icon: Stethoscope, roles: ["super_admin"] },
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
