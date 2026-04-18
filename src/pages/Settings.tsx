@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield } from "lucide-react";
+import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface HealthCheckResult {
   success: boolean;
@@ -27,6 +28,15 @@ interface HealthCheckResult {
 const Settings = () => {
   const { role } = useAuth();
   const [healthResult, setHealthResult] = useState<HealthCheckResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyToken = async () => {
+    if (!healthResult?.accessToken) return;
+    await navigator.clipboard.writeText(healthResult.accessToken);
+    setCopied(true);
+    toast.success("Token copied to clipboard");
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const healthCheckMutation = useMutation({
     mutationFn: async () => {
@@ -176,8 +186,18 @@ const Settings = () => {
                           </span>
                         )}
                       </div>
-                      <div className="rounded-md bg-background border border-border p-2 font-mono text-xs break-all select-all">
+                      <div className="relative rounded-md bg-background border border-border p-2 pr-10 font-mono text-xs break-all select-all">
                         {healthResult.accessToken}
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={handleCopyToken}
+                          className="absolute top-1 right-1 h-7 w-7"
+                          aria-label="Copy token"
+                        >
+                          {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+                        </Button>
                       </div>
                     </div>
                   )}
