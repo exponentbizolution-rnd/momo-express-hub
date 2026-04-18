@@ -138,9 +138,9 @@ const Settings = () => {
                     {healthResult.tokenError ? (
                       <span className="text-destructive text-xs">{healthResult.tokenError}</span>
                     ) : healthResult.tokenLatency ? (
-                      <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                        ✓ {healthResult.tokenLatency}ms
-                      </Badge>
+                      <span className="text-success text-xs font-medium">
+                        Success ({healthResult.tokenLatency}ms)
+                      </span>
                     ) : null}
                   </div>
                   <div className="flex items-center justify-between">
