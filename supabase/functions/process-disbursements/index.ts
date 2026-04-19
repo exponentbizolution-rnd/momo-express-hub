@@ -144,7 +144,8 @@ function sleep(ms: number) {
 }
 
 async function dbUpdate(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   table: string,
   data: Record<string, unknown>,
   matchColumn: string,
