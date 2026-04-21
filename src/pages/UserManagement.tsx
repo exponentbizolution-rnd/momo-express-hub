@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
-import { Shield, UserCog, Loader2, ChevronDown } from "lucide-react";
+import { Shield, UserCog, Loader2, Info, History, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 
@@ -32,6 +41,9 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "auditor", label: "Auditor" },
 ];
 
+const roleLabel = (r: AppRole | null) =>
+  r ? ROLE_OPTIONS.find((o) => o.value === r)?.label || r : "No role";
+
 const roleBadgeClass: Record<AppRole, string> = {
   super_admin: "bg-destructive/10 text-destructive border-destructive/20",
   initiator: "bg-primary/10 text-primary border-primary/20",
@@ -39,21 +51,25 @@ const roleBadgeClass: Record<AppRole, string> = {
   auditor: "bg-warning/10 text-warning border-warning/20",
 };
 
+interface PendingChange {
+  user: UserWithRole;
+  newRole: AppRole;
+}
+
 const UserManagement = () => {
   const { role: currentUserRole } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [pending, setPending] = useState<PendingChange | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
-      // Fetch all profiles (super_admin RLS allows this)
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
         .select("user_id, full_name, email");
       if (pErr) throw pErr;
 
-      // Fetch all roles
       const { data: roles, error: rErr } = await supabase
         .from("user_roles")
         .select("id, user_id, role");
@@ -76,37 +92,66 @@ const UserManagement = () => {
   });
 
   const assignRole = useMutation({
-    mutationFn: async ({ userId, newRole, existingRoleId }: { userId: string; newRole: AppRole; existingRoleId: string | null }) => {
-      if (existingRoleId) {
+    mutationFn: async ({
+      user,
+      newRole,
+    }: {
+      user: UserWithRole;
+      newRole: AppRole;
+    }) => {
+      const previousRole = user.role;
+      if (user.role_id) {
         const { error } = await supabase
           .from("user_roles")
           .update({ role: newRole })
-          .eq("id", existingRoleId);
+          .eq("id", user.role_id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("user_roles")
-          .insert({ user_id: userId, role: newRole });
+          .insert({ user_id: user.user_id, role: newRole });
         if (error) throw error;
       }
 
-      // Log the action
+      // action_type must match DB check constraint — use 'config'
       await supabase.from("audit_logs").insert({
-        action: `Role changed to ${newRole}`,
-        action_type: "role_change",
+        action: `Role changed: ${user.email || user.full_name} → ${roleLabel(newRole)}`,
+        action_type: "config",
         user_name: "Super Admin",
         user_role: "super_admin",
-        details: { target_user_id: userId, new_role: newRole },
+        details: {
+          target_user_id: user.user_id,
+          target_email: user.email,
+          previous_role: previousRole,
+          new_role: newRole,
+        },
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      toast({ title: "Role updated", description: "User role has been updated successfully." });
+      toast({
+        title: "Role updated",
+        description: `${vars.user.email || vars.user.full_name} is now ${roleLabel(vars.newRole)}.`,
+      });
+      setPending(null);
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const restoreBwiso = () => {
+    const target = users?.find((u) => u.email === "bwiso.daka@gmail.com");
+    if (!target) {
+      toast({
+        title: "User not found",
+        description: "bwiso.daka@gmail.com is not in the user list.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPending({ user: target, newRole: "super_admin" });
+  };
 
   if (currentUserRole !== "super_admin") {
     return (
@@ -119,11 +164,56 @@ const UserManagement = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">User Management</h1>
-        <p className="text-sm text-muted-foreground mt-1">Assign and manage roles for all users</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Assign and manage roles for all users
+        </p>
       </div>
+
+      {/* Help banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-info/20 bg-info/5 p-4 flex gap-3"
+      >
+        <Info size={18} className="text-info shrink-0 mt-0.5" />
+        <div className="space-y-1 text-sm">
+          <p className="font-medium text-foreground">
+            Roles live in the database, not in the app code
+          </p>
+          <p className="text-muted-foreground">
+            User roles are stored in our managed backend (Lovable Cloud). Editing
+            files on your Linode server, redeploying the app, or restoring code
+            versions will <span className="font-medium text-foreground">not</span> change
+            anyone's role. The Linode server is only a network proxy for MTN MoMo API
+            calls. Use this page (or the guided action below) to change roles safely.
+          </p>
+        </div>
+      </motion.div>
+
+      {/* Guided restore action */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-border bg-card p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between"
+      >
+        <div className="flex gap-3">
+          <History size={18} className="text-primary shrink-0 mt-0.5" />
+          <div className="space-y-1 text-sm">
+            <p className="font-medium text-foreground">Guided restore</p>
+            <p className="text-muted-foreground">
+              Quickly restore <span className="font-mono">bwiso.daka@gmail.com</span> to{" "}
+              <span className="font-medium text-foreground">Super Admin</span>. You'll
+              see the before/after values and confirm before the change is saved.
+            </p>
+          </div>
+        </div>
+        <Button onClick={restoreBwiso} className="shrink-0">
+          Restore bwiso.daka to Super Admin
+        </Button>
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -134,7 +224,9 @@ const UserManagement = () => {
           <UserCog size={18} className="text-primary" />
           <h3 className="font-display text-base font-semibold">All Users</h3>
           {users && (
-            <Badge variant="secondary" className="ml-auto">{users.length} users</Badge>
+            <Badge variant="secondary" className="ml-auto">
+              {users.length} users
+            </Badge>
           )}
         </div>
 
@@ -158,22 +250,34 @@ const UserManagement = () => {
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.user_id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                  <tr
+                    key={u.user_id}
+                    className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors"
+                  >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                          {u.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+                          {u.full_name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
                         </div>
                         <div className="flex flex-col">
                           <span className="font-medium">{u.full_name}</span>
-                          {u.email && <span className="text-xs text-muted-foreground">{u.email}</span>}
+                          {u.email && (
+                            <span className="text-xs text-muted-foreground">
+                              {u.email}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-4">
                       {u.role ? (
                         <Badge variant="outline" className={roleBadgeClass[u.role]}>
-                          {ROLE_OPTIONS.find((r) => r.value === u.role)?.label || u.role}
+                          {roleLabel(u.role)}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground text-xs">No role</span>
@@ -183,11 +287,7 @@ const UserManagement = () => {
                       <Select
                         value={u.role || ""}
                         onValueChange={(val) =>
-                          assignRole.mutate({
-                            userId: u.user_id,
-                            newRole: val as AppRole,
-                            existingRoleId: u.role_id,
-                          })
+                          setPending({ user: u, newRole: val as AppRole })
                         }
                       >
                         <SelectTrigger className="w-[180px] h-9">
@@ -209,6 +309,90 @@ const UserManagement = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Confirm dialog with before/after */}
+      <Dialog open={!!pending} onOpenChange={(open) => !open && setPending(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm role change</DialogTitle>
+            <DialogDescription>
+              Review the change below. This will be recorded in the audit log.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pending && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border p-3 text-sm">
+                <div className="font-medium">{pending.user.full_name}</div>
+                {pending.user.email && (
+                  <div className="text-xs text-muted-foreground">
+                    {pending.user.email}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Before</span>
+                  {pending.user.role ? (
+                    <Badge
+                      variant="outline"
+                      className={roleBadgeClass[pending.user.role]}
+                    >
+                      {roleLabel(pending.user.role)}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">No role</Badge>
+                  )}
+                </div>
+                <ArrowRight size={18} className="text-muted-foreground" />
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-xs text-muted-foreground">After</span>
+                  <Badge
+                    variant="outline"
+                    className={roleBadgeClass[pending.newRole]}
+                  >
+                    {roleLabel(pending.newRole)}
+                  </Badge>
+                </div>
+              </div>
+
+              {pending.user.role === pending.newRole && (
+                <p className="text-xs text-warning text-center">
+                  This user already has this role.
+                </p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPending(null)}
+              disabled={assignRole.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => pending && assignRole.mutate(pending)}
+              disabled={
+                !pending ||
+                assignRole.isPending ||
+                pending.user.role === pending.newRole
+              }
+            >
+              {assignRole.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Confirm change"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
