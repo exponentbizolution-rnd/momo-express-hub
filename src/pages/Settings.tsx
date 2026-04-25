@@ -69,6 +69,25 @@ const Settings = () => {
     },
   });
 
+  const credHealthCheckMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("mtn-health-check", {
+        body: { environment: "production" },
+      });
+      if (error) throw error;
+      return data as HealthCheckResult;
+    },
+    onSuccess: (data) => setCredHealthResult(data),
+    onError: (err: Error) => {
+      setCredHealthResult({
+        success: false,
+        environment: "unknown",
+        secretsConfigured: { primaryKey: false, targetEnv: false },
+        error: err.message,
+      });
+    },
+  });
+
   if (role !== "super_admin") {
     return <Navigate to="/dashboard" replace />;
   }
