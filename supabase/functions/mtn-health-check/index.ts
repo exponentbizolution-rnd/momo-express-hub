@@ -1,3 +1,5 @@
+import { getMtnCredentials } from "../_shared/mtn-credentials.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -10,10 +12,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
+    const creds = await getMtnCredentials();
+    const primaryKey = creds.MTN_MOMO_PRIMARY_KEY;
     const targetEnv = Deno.env.get("MTN_TARGET_ENVIRONMENT") || "zambia";
-    const apiUser = Deno.env.get("MTN_API_USER");
-    const apiKey = Deno.env.get("MTN_API_KEY");
+    const apiUser = creds.MTN_API_USER;
+    const apiKey = creds.MTN_API_KEY;
 
     const results: Record<string, unknown> = {
       success: false,
