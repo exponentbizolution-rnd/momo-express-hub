@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getMtnCredentials } from "../_shared/mtn-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +15,9 @@ interface MtnConfig {
   primaryKey: string;
 }
 
-function getMtnConfig(): MtnConfig {
-  const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
+async function getMtnConfig(): Promise<MtnConfig> {
+  const creds = await getMtnCredentials();
+  const primaryKey = creds.MTN_MOMO_PRIMARY_KEY;
   if (!primaryKey) throw new Error("MTN_MOMO_PRIMARY_KEY not configured");
 
   const baseUrl = "https://proxy.momoapi.mtn.com";
@@ -29,9 +31,10 @@ function getMtnConfig(): MtnConfig {
   };
 }
 
-function getCredentials(): { apiUser: string; apiKey: string } {
-  const apiUser = Deno.env.get("MTN_API_USER");
-  const apiKey = Deno.env.get("MTN_API_KEY");
+async function getCredentials(): Promise<{ apiUser: string; apiKey: string }> {
+  const creds = await getMtnCredentials();
+  const apiUser = creds.MTN_API_USER;
+  const apiKey = creds.MTN_API_KEY;
   if (!apiUser || !apiKey) {
     throw new Error("MTN_API_USER and MTN_API_KEY secrets are required");
   }

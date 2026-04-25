@@ -1,11 +1,14 @@
+import { getMtnCredentials } from "../_shared/mtn-credentials.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function getMtnConfig() {
-  const primaryKey = Deno.env.get("MTN_MOMO_PRIMARY_KEY");
+async function getMtnConfig() {
+  const creds = await getMtnCredentials();
+  const primaryKey = creds.MTN_MOMO_PRIMARY_KEY;
   if (!primaryKey) throw new Error("MTN_MOMO_PRIMARY_KEY not configured");
 
   const baseUrl = "https://proxy.momoapi.mtn.com";
@@ -18,9 +21,10 @@ function getMtnConfig() {
   };
 }
 
-function getCredentials(): { apiUser: string; apiKey: string } {
-  const apiUser = Deno.env.get("MTN_API_USER");
-  const apiKey = Deno.env.get("MTN_API_KEY");
+async function getCredentials(): Promise<{ apiUser: string; apiKey: string }> {
+  const creds = await getMtnCredentials();
+  const apiUser = creds.MTN_API_USER;
+  const apiKey = creds.MTN_API_KEY;
   if (!apiUser || !apiKey) {
     throw new Error("MTN_API_USER and MTN_API_KEY secrets are required");
   }
