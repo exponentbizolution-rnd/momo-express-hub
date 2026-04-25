@@ -364,6 +364,27 @@ const Settings = () => {
                         : "Credential check failed"}
                     </span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => exportHealthResult("json")}
+                    >
+                      <FileJson size={14} className="mr-1" />
+                      JSON
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => exportHealthResult("csv")}
+                    >
+                      <FileSpreadsheet size={14} className="mr-1" />
+                      CSV
+                    </Button>
+                  </div>
+                </div>
                   <div className="grid gap-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Token Generation</span>
