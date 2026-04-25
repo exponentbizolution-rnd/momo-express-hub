@@ -32,7 +32,7 @@ async function getCredentials(): Promise<{ apiUser: string; apiKey: string }> {
   return { apiUser, apiKey };
 }
 
-async function getOAuthToken(config: ReturnType<typeof getMtnConfig>, apiUser: string, apiKey: string): Promise<string> {
+async function getOAuthToken(config: Awaited<ReturnType<typeof getMtnConfig>>, apiUser: string, apiKey: string): Promise<string> {
   const credentials = btoa(`${apiUser}:${apiKey}`);
   const res = await fetch(`${config.disbursementUrl}/token/`, {
     method: "POST",
@@ -48,7 +48,7 @@ async function getOAuthToken(config: ReturnType<typeof getMtnConfig>, apiUser: s
 
 async function requestRefund(
   token: string,
-  config: ReturnType<typeof getMtnConfig>,
+  config: Awaited<ReturnType<typeof getMtnConfig>>,
   transaction: { id: string; amount: number; mtn_transaction_id: string; recipient_name: string },
 ): Promise<string> {
   const refundReferenceId = crypto.randomUUID();
@@ -81,7 +81,7 @@ async function requestRefund(
 
 async function checkRefundStatus(
   token: string,
-  config: ReturnType<typeof getMtnConfig>,
+  config: Awaited<ReturnType<typeof getMtnConfig>>,
   refundReferenceId: string,
 ): Promise<{ status: string; reason?: string }> {
   const res = await fetch(`${config.disbursementUrl}/v1_0/refund/${refundReferenceId}`, {
