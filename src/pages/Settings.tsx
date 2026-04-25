@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check, KeyRound, AlertTriangle, ExternalLink, Eye, EyeOff } from "lucide-react";
+import {
+  Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check, KeyRound, AlertTriangle, ExternalLink, Eye, EyeOff, Download, FileJson, FileSpreadsheet,
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
