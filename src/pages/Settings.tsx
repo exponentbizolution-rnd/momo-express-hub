@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check, KeyRound, AlertTriangle, ExternalLink, Eye, EyeOff } from "lucide-react";
+import {
+  Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check, KeyRound, AlertTriangle, ExternalLink, Eye, EyeOff, Download, FileJson, FileSpreadsheet,
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +50,42 @@ const Settings = () => {
     setCopied(true);
     toast.success("Token copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const exportHealthResult = (format: "json" | "csv") => {
+    if (!credHealthResult) return;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    if (format === "json") {
+      const blob = new Blob([JSON.stringify(credHealthResult, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mtn-health-check-${timestamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Health check JSON exported");
+    } else {
+      const rows = [
+        ["Metric", "Value"],
+        ["Success", credHealthResult.success ? "Yes" : "No"],
+        ["Environment", credHealthResult.environment],
+        ["Token Latency (ms)", credHealthResult.tokenLatency?.toString() ?? ""],
+        ["Balance Latency (ms)", credHealthResult.balanceLatency?.toString() ?? ""],
+        ["Available Balance", credHealthResult.balance ? `${credHealthResult.balance.currency} ${credHealthResult.balance.availableBalance}` : ""],
+        ["Token Error", credHealthResult.tokenError ?? ""],
+        ["Balance Error", credHealthResult.balanceError ?? ""],
+        ["General Error", credHealthResult.error ?? ""],
+      ];
+      const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mtn-health-check-${timestamp}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Health check CSV exported");
+    }
   };
 
   const healthCheckMutation = useMutation({
@@ -314,17 +352,39 @@ const Settings = () => {
                   animate={{ opacity: 1, height: "auto" }}
                   className="rounded-lg border border-border bg-muted/50 p-4 space-y-3"
                 >
-                  <div className="flex items-center gap-2">
-                    {credHealthResult.success ? (
-                      <CheckCircle className="text-success" size={20} />
-                    ) : (
-                      <XCircle className="text-destructive" size={20} />
-                    )}
-                    <span className="font-medium text-sm">
-                      {credHealthResult.success
-                        ? "Credentials are working"
-                        : "Credential check failed"}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {credHealthResult.success ? (
+                        <CheckCircle className="text-success" size={20} />
+                      ) : (
+                        <XCircle className="text-destructive" size={20} />
+                      )}
+                      <span className="font-medium text-sm">
+                        {credHealthResult.success
+                          ? "Credentials are working"
+                          : "Credential check failed"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => exportHealthResult("json")}
+                      >
+                        <FileJson size={14} className="mr-1" />
+                        JSON
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => exportHealthResult("csv")}
+                      >
+                        <FileSpreadsheet size={14} className="mr-1" />
+                        CSV
+                      </Button>
+                    </div>
                   </div>
                   <div className="grid gap-2 text-xs">
                     <div className="flex items-center justify-between">
