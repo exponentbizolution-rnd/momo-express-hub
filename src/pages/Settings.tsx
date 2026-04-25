@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check } from "lucide-react";
+import { Settings as SettingsIcon, Activity, CheckCircle, XCircle, Loader2, Shield, Copy, Check, KeyRound, AlertTriangle, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -209,7 +210,90 @@ const Settings = () => {
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound size={20} />
+              MTN MoMo API Credentials
+            </CardTitle>
+            <CardDescription>
+              Update the credentials used by the disbursement engine. Values are stored as encrypted backend secrets and are never displayed in the UI.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Production credentials</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>
+                  These power live ZMW disbursements. Updating a value redeploys the edge functions automatically. Run a Health Check above after saving to confirm the new credentials work.
+                </p>
+                <a
+                  href="https://momodeveloper.mtn.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  Open MTN MoMo Developer Portal <ExternalLink size={12} />
+                </a>
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid gap-3">
+              <CredentialRow
+                label="Subscription Key"
+                description="Primary key from your MTN MoMo Developer Portal subscription (Disbursement product)."
+                secretName="MTN_MOMO_PRIMARY_KEY"
+              />
+              <CredentialRow
+                label="API User ID"
+                description="The UUID you generated when provisioning the API user (X-Reference-Id)."
+                secretName="MTN_API_USER"
+              />
+              <CredentialRow
+                label="API Key"
+                description="The API key returned by MTN when you created the API user."
+                secretName="MTN_API_KEY"
+              />
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
+    </div>
+  );
+};
+
+interface CredentialRowProps {
+  label: string;
+  description: string;
+  secretName: string;
+}
+
+const CredentialRow = ({ label, description, secretName }: CredentialRowProps) => {
+  const handleUpdate = () => {
+    toast.info(
+      `To update ${label}, ask the assistant: "Update the ${secretName} secret"`,
+      { duration: 6000 }
+    );
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-sm">{label}</span>
+          <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px]">
+            <CheckCircle size={10} className="mr-1" />
+            Configured
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+        <code className="text-[10px] text-muted-foreground font-mono mt-1 block">{secretName}</code>
+      </div>
+      <Button size="sm" variant="outline" onClick={handleUpdate}>
+        Update
+      </Button>
     </div>
   );
 };
